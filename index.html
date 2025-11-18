@@ -2,418 +2,406 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>85142 • Current, 7-Day & 24-Hour (Graph) • weather.gov</title>
-
-  <!-- iPhone-friendly meta -->
+  <title>Weather + Solunar • Queen Creek • Sunnyvale • Heber</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
-
   <style>
-    :root {
-      color-scheme: dark;
-      --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3;
-    }
+    :root { color-scheme: dark; --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3; }
     html,body { height:100%; margin:0; background:var(--bg); color:#e6eef7;
-      font:16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+      font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji",sans-serif;
       -webkit-text-size-adjust:100%;
     }
-    .wrap { max-width:1000px; margin:0 auto; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
-    .card {
-      background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
-      border:1px solid rgba(255,255,255,0.08);
-      border-radius:20px; box-shadow:0 8px 30px rgba(0,0,0,0.35);
-      padding:16px 16px; margin-bottom:14px;
-      -webkit-backdrop-filter:saturate(120%) blur(2px); backdrop-filter:saturate(120%) blur(2px);
-    }
-    h1 { margin:0 0 4px; font-size:22px; font-weight:700; letter-spacing:.2px }
-    h2 { margin:12px 0 6px; font-size:18px; font-weight:700 }
+    a { color:var(--accent); text-decoration:none; border-bottom:1px dashed rgba(110,231,255,.35) }
+    .wrap { max-width:1100px; margin:0 auto; padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); }
+    .card { background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));
+      border:1px solid rgba(255,255,255,.08); border-radius:20px; box-shadow:0 8px 30px rgba(0,0,0,.35); padding:16px; margin-bottom:16px; }
     .muted { color:var(--muted) }
+    .title { display:flex; justify-content:space-between; align-items:center; gap:8px }
+    .title h1 { margin:0; font-size:22px }
+    .btn { background:linear-gradient(180deg,#1a2a45,#13243d); color:#e6f2ff; border:1px solid rgba(255,255,255,.12);
+      border-radius:14px; padding:12px 16px; cursor:pointer; font-weight:700; font-size:16px; -webkit-tap-highlight-color:transparent; }
+    .btn:active { transform:translateY(1px) }
+    .btn:disabled { opacity:.6; cursor:not-allowed }
+    .grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+    .grid-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .grid-7 { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; margin-top:10px }
+    .pill, .day { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.10); border-radius:12px; padding:10px 12px; }
     .row { display:flex; align-items:center; gap:12px; flex-wrap:wrap }
     .temp { font-size:48px; font-weight:750; letter-spacing:.5px }
     .unit { font-size:18px; color:var(--muted) }
-    .status { margin-top:8px; font-size:14px }
-    .status.ok { color:var(--ok) } .status.err { color:var(--err) }
-    .grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:10px }
-    .grid-7 { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; margin-top:10px }
-    .pill, .day {
-      background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10);
-      padding:10px 12px; border-radius:12px; min-height:60px;
-    }
-    .day h3 { margin:0 0 4px; font-size:14px }
-    .day .t { font-size:20px; font-weight:700 }
-    .small { font-size:12px }
-    .flex { display:flex; align-items:center; gap:10px; flex-wrap:wrap }
-    .sp { justify-content:space-between }
-    a { color:var(--accent); text-decoration:none; border-bottom:1px dashed rgba(110,231,255,.35) }
-    button {
-      background:linear-gradient(180deg,#1a2a45,#13243d);
-      color:#e6f2ff; border:1px solid rgba(255,255,255,0.12);
-      border-radius:14px; padding:12px 16px; cursor:pointer; font-weight:700; font-size:16px;
-      -webkit-tap-highlight-color:transparent;
-    }
-    button:active { transform: translateY(1px); }
-    button:disabled { opacity:.6; cursor:not-allowed }
-
-    .footer { margin-top:8px; font-size:13px; color:var(--muted) }
-
+    .status { margin-top:8px; font-size:14px } .ok { color:var(--ok) } .err { color:var(--err) }
+    .day h3 { margin:0 0 4px; font-size:14px } .day .t { font-size:20px; font-weight:700 }
     .chart-wrap { position:relative; width:100%; height:320px; touch-action:manipulation; }
-    @media (max-width:480px){ .temp{font-size:40px} .grid-3{grid-template-columns:1fr} .grid-7{grid-template-columns:repeat(2, minmax(0,1fr))} .chart-wrap{height:260px} }
-    canvas { width:100%; height:100%; display:block; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08) }
-    .tooltip {
-      position:absolute; pointer-events:none; background:#0b1220; color:#e6eef7;
-      border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:6px 8px; font-size:12px;
-      transform:translate(-50%,-110%); white-space:nowrap; box-shadow:0 8px 20px rgba(0,0,0,.35); display:none;
-    }
-
-    /* iOS niceties */
-    * { -webkit-touch-callout:none; }
-    input, button { -webkit-appearance:none; }
+    canvas { width:100%; height:100%; display:block; border-radius:12px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08) }
+    .tooltip { position:absolute; pointer-events:none; background:#0b1220; color:#e6eef7; border:1px solid rgba(255,255,255,.15);
+      border-radius:10px; padding:6px 8px; font-size:12px; transform:translate(-50%,-110%); white-space:nowrap; box-shadow:0 8px 20px rgba(0,0,0,.35); display:none; }
+    .choices { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px }
+    .choice { background:rgba(255,255,255,.06); border:1px dashed rgba(255,255,255,.18); border-radius:16px; padding:16px; cursor:pointer; text-align:center; font-weight:700 }
+    .choice:hover { border-style:solid }
+    @media (max-width:900px){ .grid-3{grid-template-columns:1fr} .grid-7{grid-template-columns:repeat(3,minmax(0,1fr))} .choices{grid-template-columns:1fr} .chart-wrap{height:260px} .temp{font-size:40px} }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <!-- CURRENT -->
-    <div class="card" id="card-current">
-      <div class="flex sp">
-        <div>
-          <h1>Weather • <strong>85142</strong></h1>
-          <div class="muted" id="place">Initializing…</div>
-        </div>
-        <div class="flex">
-          <button id="refreshBtn" title="Refresh">Refresh</button>
-        </div>
-      </div>
-
-      <div class="row" style="margin-top:10px">
-        <div class="temp" id="temp">—</div>
-        <div class="unit" id="unit">°F</div>
-      </div>
-
-      <div class="grid-3">
-        <div class="pill">
-          <div><strong>Observation Station</strong></div>
-          <div class="muted" id="station">—</div>
-        </div>
-        <div class="pill">
-          <div><strong>Observed</strong></div>
-          <div class="muted" id="observed">—</div>
-        </div>
-        <div class="pill">
-          <div><strong>API Source</strong></div>
-          <div class="muted"><a id="obsApiLink" href="#" target="_blank" rel="noopener">Latest observation JSON</a></div>
-        </div>
-      </div>
-
-      <div class="status" id="status">Contacting weather.gov…</div>
+<div class="wrap">
+  <!-- ROUTER: HOME -->
+  <div id="view-home" class="card">
+    <div class="title">
+      <h1>Pick a place</h1>
     </div>
-
-    <!-- 7-DAY -->
-    <div class="card" id="card-7day">
-      <h2>7-Day Forecast</h2>
-      <div class="grid-7" id="days"></div>
-      <div class="footer">
-        Source: <a id="dailyApiLink" href="#" target="_blank" rel="noopener">/forecast (periods)</a>
-      </div>
+    <div class="choices">
+      <div class="choice" data-place="queencreek">Queen Creek, AZ<br><span class="muted">ZIP 85142</span></div>
+      <div class="choice" data-place="sunnyvale">Sunnyvale, CA</div>
+      <div class="choice" data-place="heber">Heber, AZ</div>
     </div>
-
-    <!-- 24-HOUR HOURLY (GRAPH) -->
-    <div class="card" id="card-hourly">
-      <h2>Next 24 Hours (Hourly Temperature)</h2>
-      <div class="chart-wrap" id="chartWrap">
-        <canvas id="hourlyChart" width="1000" height="320"></canvas>
-        <div class="tooltip" id="tooltip"></div>
-      </div>
-      <div class="footer">
-        Pinch to zoom the page if needed. Tap/drag over points to see exact values.
-        Source: <a id="hourlyApiLink" href="#" target="_blank" rel="noopener">/forecast/hourly</a>
-      </div>
-    </div>
-
-    <div class="footer muted">
-      NWS API docs: <a href="https://www.weather.gov/documentation/services-web-api" target="_blank" rel="noopener">api.weather.gov</a>.
-      Flow: <code>points → stations/observations → forecast & forecast/hourly</code>.
+    <div class="muted" style="margin-top:10px">
+      Weather data from the National Weather Service (api.weather.gov). Solunar (major/minor lunar bite windows) from api.solunar.org.
     </div>
   </div>
 
-  <script>
-    // Fixed ZIP 85142 (Queen Creek, AZ). Coordinates approximate ZIP centroid.
-    const ZIP = "85142";
-    const LAT = 33.2425;
-    const LON = -111.6343;
+  <!-- ROUTER: DETAIL -->
+  <div id="view-detail" class="card" style="display:none">
+    <div class="title">
+      <h1 id="placeTitle">—</h1>
+      <div class="row">
+        <button class="btn" id="backBtn">◀︎ Places</button>
+        <button class="btn" id="refreshBtn">Refresh</button>
+      </div>
+    </div>
 
-    const els = {
-      temp: document.getElementById('temp'),
-      unit: document.getElementById('unit'),
-      station: document.getElementById('station'),
-      observed: document.getElementById('observed'),
-      place: document.getElementById('place'),
-      status: document.getElementById('status'),
-      refresh: document.getElementById('refreshBtn'),
-      obsApiLink: document.getElementById('obsApiLink'),
-      dailyApiLink: document.getElementById('dailyApiLink'),
-      hourlyApiLink: document.getElementById('hourlyApiLink'),
-      days: document.getElementById('days'),
-      canvas: document.getElementById('hourlyChart'),
-      tooltip: document.getElementById('tooltip'),
-      chartWrap: document.getElementById('chartWrap'),
-    };
+    <!-- CURRENT -->
+    <div class="row" style="margin-top:10px">
+      <div class="temp" id="temp">—</div>
+      <div class="unit" id="unit">°F</div>
+      <div class="muted" id="observed">Observed —</div>
+    </div>
 
-    const fmtDateTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    <div class="grid-3" style="margin-top:10px">
+      <div class="pill"><div><strong>Observation Station</strong></div><div class="muted" id="station">—</div></div>
+      <div class="pill"><div><strong>Location</strong></div><div class="muted" id="placeMeta">—</div></div>
+      <div class="pill"><div><strong>APIs</strong></div>
+        <div class="muted" style="font-size:13px">
+          <a id="obsApiLink" href="#" target="_blank" rel="noopener">obs</a> ·
+          <a id="dailyApiLink" href="#" target="_blank" rel="noopener">daily</a> ·
+          <a id="hourlyApiLink" href="#" target="_blank" rel="noopener">hourly</a> ·
+          <a id="solunarApiLink" href="#" target="_blank" rel="noopener">solunar</a>
+        </div>
+      </div>
+    </div>
 
-    function setStatus(text, cls) {
-      els.status.textContent = text;
-      els.status.className = 'status ' + (cls || '');
+    <!-- 7-DAY -->
+    <div class="card" style="margin-top:12px">
+      <h2 style="margin:0 0 8px">7-Day Forecast</h2>
+      <div class="grid-7" id="days"></div>
+    </div>
+
+    <!-- HOURLY GRAPH -->
+    <div class="card">
+      <h2 style="margin:0 0 8px">Next 24 Hours (Hourly Temperature)</h2>
+      <div class="chart-wrap" id="chartWrap">
+        <canvas id="hourlyChart" width="1100" height="320"></canvas>
+        <div class="tooltip" id="tooltip"></div>
+      </div>
+    </div>
+
+    <!-- SOLUNAR -->
+    <div class="card">
+      <h2 style="margin:0 0 8px">Major / Minor Lunar Times (Today)</h2>
+      <div class="grid-2">
+        <div class="pill">
+          <div><strong>Major</strong></div>
+          <div id="majorTimes" class="muted">—</div>
+        </div>
+        <div class="pill">
+          <div><strong>Minor</strong></div>
+          <div id="minorTimes" class="muted">—</div>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:8px;font-size:13px">Times are local to the selected place’s time zone for today.</div>
+    </div>
+
+    <div class="status" id="status">Contacting weather.gov…</div>
+  </div>
+
+  <div class="muted" style="margin-top:8px;font-size:13px">
+    NWS API docs; “points → gridpoints/forecast + /forecast/hourly” and stations/observations. Solunar API for major/minor windows. Links below.
+  </div>
+</div>
+
+<script>
+/* ---------- Places ---------- */
+const PLACES = {
+  queencreek: {
+    label: "Queen Creek, AZ · 85142",
+    lat: 33.2425, lon: -111.6343,
+    tz: "America/Phoenix"
+  },
+  sunnyvale: {
+    label: "Sunnyvale, CA",
+    lat: 37.3688, lon: -122.0363,
+    tz: "America/Los_Angeles"
+  },
+  heber: {
+    label: "Heber, AZ",
+    lat: 34.4206, lon: -110.5696,
+    tz: "America/Phoenix"
+  }
+};
+
+/* ---------- Router ---------- */
+const els = {
+  home: document.getElementById('view-home'),
+  detail: document.getElementById('view-detail'),
+  placeTitle: document.getElementById('placeTitle'),
+  placeMeta: document.getElementById('placeMeta'),
+  back: document.getElementById('backBtn'),
+  refresh: document.getElementById('refreshBtn'),
+  temp: document.getElementById('temp'),
+  unit: document.getElementById('unit'),
+  observed: document.getElementById('observed'),
+  station: document.getElementById('station'),
+  days: document.getElementById('days'),
+  chartWrap: document.getElementById('chartWrap'),
+  canvas: document.getElementById('hourlyChart'),
+  tooltip: document.getElementById('tooltip'),
+  status: document.getElementById('status'),
+  obsApiLink: document.getElementById('obsApiLink'),
+  dailyApiLink: document.getElementById('dailyApiLink'),
+  hourlyApiLink: document.getElementById('hourlyApiLink'),
+  solunarApiLink: document.getElementById('solunarApiLink'),
+};
+
+let currentPlaceKey = null;
+[...document.querySelectorAll('.choice')].forEach(el => {
+  el.addEventListener('click', () => openPlace(el.dataset.place), { passive: true });
+});
+els.back.addEventListener('click', () => {
+  els.detail.style.display = 'none';
+  els.home.style.display = '';
+  history.replaceState({}, '', '#/');
+}, { passive: true });
+
+function openPlace(key) {
+  currentPlaceKey = key;
+  const p = PLACES[key];
+  els.placeTitle.textContent = p.label;
+  els.placeMeta.textContent = `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)} • ${p.tz}`;
+  els.home.style.display = 'none';
+  els.detail.style.display = '';
+  history.replaceState({}, '', `#/${key}`);
+  loadAll(p).catch(err => setStatus(`Load failed: ${err.message}`, 'err'));
+}
+if (location.hash.startsWith('#/')) {
+  const k = location.hash.slice(2);
+  if (PLACES[k]) openPlace(k);
+}
+
+/* ---------- Helpers ---------- */
+function setStatus(text, cls) {
+  els.status.textContent = text;
+  els.status.className = 'status ' + (cls || '');
+}
+async function fetchJson(url, accept='application/geo+json') {
+  const res = await fetch(url, { headers: { 'Accept': accept }});
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  return res.json();
+}
+function dayCard(period) {
+  const div = document.createElement('div');
+  div.className = 'day';
+  const tempText = period.temperature != null ? `${period.temperature}°${period.temperatureUnit}` : '—';
+  div.innerHTML = `<h3>${period.name || new Date(period.startTime).toLocaleDateString(undefined,{weekday:'short'})}</h3>
+                   <div class="t">${tempText}</div>
+                   <div class="muted" style="font-size:12px">${period.shortForecast || ''}</div>`;
+  return div;
+}
+
+/* ---------- Hourly chart (vanilla canvas) ---------- */
+let hourlyPlotState = null;
+function setupCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = els.canvas.clientWidth || 1100;
+  const cssH = els.canvas.clientHeight || 320;
+  els.canvas.width = Math.round(cssW * dpr);
+  els.canvas.height = Math.round(cssH * dpr);
+  const ctx = els.canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, W: cssW, H: cssH };
+}
+function niceStep(raw){ const steps=[1,2,5,10]; const pow=10**Math.floor(Math.log10(raw)); for(const s of steps){const v=s*pow; if(raw<=v) return v;} return 10*pow; }
+const hourLabel = d => d.toLocaleTimeString([], { hour: 'numeric' });
+
+function drawHourly(points){
+  const { ctx, W, H } = setupCanvas();
+  const pad = { l:46, r:10, t:14, b:34 };
+  const chartW = W - pad.l - pad.r, chartH = H - pad.t - pad.b;
+
+  const vals = points.map(p=>p.temp).filter(Number.isFinite);
+  const tMin = Math.min(...vals), tMax = Math.max(...vals);
+  const range = Math.max(4, tMax - tMin);
+  const yMin = Math.floor(tMin - Math.max(2, range*0.1));
+  const yMax = Math.ceil(tMax + Math.max(2, range*0.1));
+  const x = i => pad.l + (i/(points.length-1))*chartW;
+  const y = v => pad.t + (1 - (v - yMin)/(yMax - yMin))*chartH;
+
+  // grid
+  ctx.strokeStyle = 'rgba(230,238,247,0.12)'; ctx.lineWidth = 1; ctx.beginPath();
+  const step = niceStep((yMax - yMin)/6);
+  for (let v=Math.ceil(yMin/step)*step; v<=yMax; v+=step){ const yy = y(v); ctx.moveTo(pad.l,yy); ctx.lineTo(W-pad.r,yy); }
+  ctx.stroke();
+
+  // y labels
+  ctx.fillStyle = '#9fb3c8'; ctx.font = '12px -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  for (let v=Math.ceil(yMin/step)*step; v<=yMax; v+=step){ ctx.fillText(`${Math.round(v)}°F`, pad.l-8, y(v)); }
+
+  // x labels each 3 hours
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  for (let i=0;i<points.length;i+=3){ ctx.fillText(hourLabel(points[i].time), x(i), H - pad.b + 8); }
+
+  // line
+  ctx.beginPath();
+  for (let i=0;i<points.length;i++){ const xx=x(i), yy=y(points[i].temp); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
+  ctx.strokeStyle = '#6ee7ff'; ctx.lineWidth = 2.25; ctx.stroke();
+
+  // points
+  ctx.fillStyle = '#e6eef7';
+  for (let i=0;i<points.length;i++){ const xx=x(i), yy=y(points[i].temp); ctx.beginPath(); ctx.arc(xx,yy,3,0,Math.PI*2); ctx.fill(); }
+
+  hourlyPlotState = { x, y, points };
+}
+function nearestPoint(px,py){
+  if(!hourlyPlotState) return null;
+  const { x,y,points } = hourlyPlotState;
+  let best=null, bestDist=1e9;
+  for (let i=0;i<points.length;i++){
+    const dx = x(i)-px, dy=y(points[i].temp)-py, d=Math.hypot(dx,dy);
+    if(d<bestDist){ bestDist=d; best = {i, p:points[i], d}; }
+  }
+  return best;
+}
+(function attachTooltip(){
+  const c = els.canvas, tip = els.tooltip;
+  const show = (clientX, clientY) => {
+    const r = c.getBoundingClientRect();
+    const hit = nearestPoint(clientX - r.left, clientY - r.top);
+    if(!hit || hit.d>28){ tip.style.display='none'; return; }
+    tip.style.display='block';
+    tip.textContent = `${hourLabel(hit.p.time)} • ${Math.round(hit.p.temp)}°F${hit.p.short? ' • '+hit.p.short:''}`;
+    tip.style.left = `${clientX - r.left}px`; tip.style.top = `${clientY - r.top}px`;
+  };
+  c.addEventListener('mousemove', e=>show(e.clientX,e.clientY), {passive:true});
+  c.addEventListener('mouseleave', ()=> tip.style.display='none', {passive:true});
+  c.addEventListener('touchstart', e=>{ const t=e.changedTouches[0]; show(t.clientX,t.clientY); }, {passive:true});
+  c.addEventListener('touchmove', e=>{ const t=e.changedTouches[0]; show(t.clientX,t.clientY); }, {passive:true});
+  window.addEventListener('resize', ()=>{ if(hourlyPlotState) drawHourly(hourlyPlotState.points); }, {passive:true});
+})();
+
+/* ---------- Time zone helpers for Solunar ---------- */
+function tzOffsetHours(timeZone, date=new Date()){
+  // minutes difference: zoneTime -> UTC
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone, year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
+  });
+  const parts = dtf.formatToParts(date).reduce((acc,p)=>{acc[p.type]=p.value; return acc;}, {});
+  const asUTC = Date.UTC(+parts.year, +parts.month-1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+  const minutes = (asUTC - date.getTime())/60000; // positive if zone ahead of UTC
+  return Math.round(minutes/60);
+}
+function yyyymmddInZone(timeZone, date=new Date()){
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone, year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(date)
+      .reduce((a,c)=>{a[c.type]=c.value; return a;}, {});
+  return `${p.year}${p.month}${p.day}`; // yyyymmdd
+}
+
+/* ---------- Load + Render ---------- */
+async function loadAll(place){
+  setStatus('Contacting weather.gov…');
+  els.refresh.disabled = true;
+
+  try {
+    // 1) NWS points (gives forecast + hourly URLs and station list)
+    const pointsUrl = `https://api.weather.gov/points/${place.lat},${place.lon}`;
+    const points = await fetchJson(pointsUrl);
+    const props = points.properties || {};
+    const rel = props.relativeLocation?.properties;
+    if (rel?.city && rel?.state) els.placeMeta.textContent = `${rel.city}, ${rel.state} • ${place.lat.toFixed(4)}, ${place.lon.toFixed(4)} • ${place.tz}`;
+
+    // 2) Observations (nearest station)
+    const stationsUrl = props.observationStations;
+    const stations = await fetchJson(stationsUrl);
+    const s0 = stations.features?.[0];
+    const stationId = s0?.properties?.stationIdentifier || s0?.id?.split('/').pop();
+    els.station.textContent = s0?.properties?.name || stationId || '—';
+
+    const latestUrl = `https://api.weather.gov/stations/${stationId}/observations/latest?require_qc=true`;
+    els.obsApiLink.href = latestUrl;
+    const latest = await fetchJson(latestUrl);
+    const lp = latest.properties || {};
+    let tempC = (lp.temperature && typeof lp.temperature.value === 'number') ? lp.temperature.value : null;
+    if (tempC == null) {
+      const recentUrl = `https://api.weather.gov/stations/${stationId}/observations?limit=5`;
+      const recent = await fetchJson(recentUrl);
+      const withTemp = recent.features?.find(f => f?.properties?.temperature?.value != null);
+      if (withTemp) tempC = withTemp.properties.temperature.value;
     }
+    if (tempC != null) { els.temp.textContent = `${Math.round((tempC*9/5)+32)}`; els.unit.textContent = '°F'; }
+    els.observed.textContent = lp.timestamp ? new Date(lp.timestamp).toLocaleString() : 'Observed —';
 
-    async function fetchJson(url) {
-      const res = await fetch(url, { headers: { 'Accept': 'application/geo+json' }});
-      if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-      return res.json();
+    // 3) 7-day forecast
+    els.dailyApiLink.href = props.forecast;
+    const daily = await fetchJson(props.forecast);
+    const periods = daily.properties?.periods || [];
+    const days = [], seen = new Set();
+    for (const p of periods) {
+      const k = new Date(p.startTime).toDateString();
+      if (!seen.has(k)) { days.push(p); seen.add(k); }
+      if (days.length >= 7) break;
     }
+    els.days.innerHTML = ''; days.forEach(p => els.days.appendChild(dayCard(p)));
 
-    function makeDayCard(p) {
-      const div = document.createElement('div');
-      div.className = 'day';
-      const tempText = p.temperature != null ? `${p.temperature}°${p.temperatureUnit}` : '—';
-      div.innerHTML = `
-        <h3>${p.name || new Date(p.startTime).toLocaleDateString(undefined,{weekday:'short'})}</h3>
-        <div class="t">${tempText}</div>
-        <div class="small muted">${p.shortForecast || ''}</div>
-      `;
-      return div;
+    // 4) Hourly (next 24) → chart
+    els.hourlyApiLink.href = props.forecastHourly;
+    const hourly = await fetchJson(props.forecastHourly);
+    const h = (hourly.properties?.periods || []).slice(0,24);
+    const pts = h.map(p => ({
+      time: new Date(p.startTime),
+      temp: p.temperatureUnit === 'F' ? p.temperature : Math.round((p.temperature*9/5)+32),
+      short: p.shortForecast || ''
+    }));
+    drawHourly(pts);
+
+    // 5) Solunar (major/minor) for today at place’s time zone
+    const dateStr = yyyymmddInZone(place.tz, new Date());
+    const tzH = tzOffsetHours(place.tz, new Date());
+    const solunarUrl = `https://api.solunar.org/solunar/${place.lat},${place.lon},${dateStr},${tzH}`;
+    els.solunarApiLink.href = solunarUrl;
+    let majors='—', minors='—';
+    try {
+      const s = await fetchJson(solunarUrl, 'application/json');
+      // API fields commonly: major1Start, major1End, major2Start, major2End, minor1Start, minor1End, minor2Start, minor2End
+      const m1s = s.major1Start, m1e = s.major1End, m2s = s.major2Start, m2e = s.major2End;
+      const n1s = s.minor1Start, n1e = s.minor1End, n2s = s.minor2Start, n2e = s.minor2End;
+      majors = (m1s&&m1e ? `${m1s}–${m1e}`:'—') + ' · ' + (m2s&&m2e ? `${m2s}–${m2e}`:'—');
+      minors = (n1s&&n1e ? `${n1s}–${n1e}`:'—') + ' · ' + (n2s&&n2e ? `${n2s}–${n2e}`:'—');
+    } catch(e) {
+      majors = 'Unavailable'; minors = 'Unavailable';
     }
+    document.getElementById('majorTimes').textContent = majors;
+    document.getElementById('minorTimes').textContent = minors;
 
-    // ===== Canvas chart (mobile-friendly) =====
-    let hourlyPlotState = null;
-    let ro; // ResizeObserver
+    setStatus('Live data loaded.', 'ok');
+  } catch (e) {
+    console.error(e);
+    setStatus(`Unable to load: ${e.message}`, 'err');
+  } finally {
+    els.refresh.disabled = false;
+  }
+}
+els.refresh.addEventListener('click', () => currentPlaceKey && loadAll(PLACES[currentPlaceKey]), { passive:true });
 
-    function setupCanvasForDPR() {
-      const dpr = window.devicePixelRatio || 1;
-      const cssW = els.canvas.clientWidth || 1000;
-      const cssH = els.canvas.clientHeight || 320;
-      els.canvas.width = Math.round(cssW * dpr);
-      els.canvas.height = Math.round(cssH * dpr);
-      const ctx = els.canvas.getContext('2d');
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      return { ctx, width: cssW, height: cssH };
-    }
-
-    function niceStep(raw) {
-      const steps = [1,2,5,10];
-      const pow = Math.pow(10, Math.floor(Math.log10(raw)));
-      for (const s of steps) { const v = s * pow; if (raw <= v) return v; }
-      return 10 * pow;
-    }
-    const hourLabel = d => d.toLocaleTimeString([], { hour: 'numeric' });
-
-    function drawHourlyChart(points) {
-      const { ctx, width: W, height: H } = setupCanvasForDPR();
-      ctx.clearRect(0,0,W,H);
-
-      const pad = { l: 46, r: 10, t: 14, b: 34 };
-      const chartW = W - pad.l - pad.r;
-      const chartH = H - pad.t - pad.b;
-
-      const temps = points.map(p => p.temp).filter(v => Number.isFinite(v));
-      const tMin = Math.min(...temps);
-      const tMax = Math.max(...temps);
-      const range = Math.max(4, (tMax - tMin));
-      const yMin = Math.floor(tMin - Math.max(2, range*0.1));
-      const yMax = Math.ceil(tMax + Math.max(2, range*0.1));
-
-      const x = i => pad.l + (i/(points.length-1)) * chartW;
-      const y = v => pad.t + (1 - (v - yMin)/(yMax - yMin)) * chartH;
-
-      // grid
-      ctx.strokeStyle = 'rgba(230,238,247,0.12)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      const step = niceStep((yMax - yMin)/6);
-      for (let v = Math.ceil(yMin/step)*step; v <= yMax; v += step) {
-        const yy = y(v);
-        ctx.moveTo(pad.l, yy); ctx.lineTo(W - pad.r, yy);
-      }
-      ctx.stroke();
-
-      // y labels
-      ctx.fillStyle = '#9fb3c8';
-      ctx.font = '12px -apple-system, Segoe UI, Roboto, Helvetica, Arial';
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'middle';
-      for (let v = Math.ceil(yMin/step)*step; v <= yMax; v += step) {
-        const yy = y(v);
-        ctx.fillText(`${Math.round(v)}°F`, pad.l - 8, yy);
-      }
-
-      // x labels each 3 hours
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      for (let i = 0; i < points.length; i += 3) {
-        const xx = x(i);
-        ctx.fillText(hourLabel(points[i].time), xx, H - pad.b + 8);
-      }
-
-      // line
-      ctx.beginPath();
-      for (let i = 0; i < points.length; i++) {
-        const xx = x(i), yy = y(points[i].temp);
-        if (i === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
-      }
-      ctx.strokeStyle = '#6ee7ff';
-      ctx.lineWidth = 2.25;
-      ctx.stroke();
-
-      // points
-      ctx.fillStyle = '#e6eef7';
-      for (let i = 0; i < points.length; i++) {
-        const xx = x(i), yy = y(points[i].temp);
-        ctx.beginPath(); ctx.arc(xx, yy, 3, 0, Math.PI*2); ctx.fill();
-      }
-
-      hourlyPlotState = { pad, x, y, points, width: W, height: H };
-    }
-
-    function findNearestPoint(px, py) {
-      if (!hourlyPlotState) return null;
-      const { x, y, points } = hourlyPlotState;
-      let best = null, bestDist = Infinity, idx = -1;
-      for (let i = 0; i < points.length; i++) {
-        const dx = x(i) - px, dy = y(points[i].temp) - py;
-        const d = Math.hypot(dx, dy);
-        if (d < bestDist) { bestDist = d; best = points[i]; idx = i; }
-      }
-      return { p: best, idx, dist: bestDist };
-    }
-
-    function attachMobileTooltip() {
-      const c = els.canvas, tip = els.tooltip;
-
-      const showTip = (clientX, clientY) => {
-        const rect = c.getBoundingClientRect();
-        const px = clientX - rect.left, py = clientY - rect.top;
-        const hit = findNearestPoint(px, py);
-        if (!hit || hit.dist > 28) { tip.style.display = 'none'; return; }
-        const p = hit.p;
-        tip.style.display = 'block';
-        tip.textContent = `${hourLabel(p.time)} • ${Math.round(p.temp)}°F${p.short ? ' • ' + p.short : ''}`;
-        tip.style.left = `${px}px`;
-        tip.style.top = `${py}px`;
-      };
-
-      c.addEventListener('mousemove', (e) => showTip(e.clientX, e.clientY), { passive: true });
-      c.addEventListener('mouseleave', () => { els.tooltip.style.display = 'none'; }, { passive: true });
-
-      c.addEventListener('touchstart', (e) => {
-        const t = e.changedTouches[0];
-        showTip(t.clientX, t.clientY);
-      }, { passive: true });
-
-      c.addEventListener('touchmove', (e) => {
-        const t = e.changedTouches[0];
-        showTip(t.clientX, t.clientY);
-      }, { passive: true });
-
-      c.addEventListener('touchend', () => { /* keep tooltip visible on last point */ }, { passive: true });
-    }
-
-    // Debounce redraw on rotation/resize for iOS
-    let redrawRAF = 0;
-    function requestRedraw() {
-      if (redrawRAF) cancelAnimationFrame(redrawRAF);
-      redrawRAF = requestAnimationFrame(() => {
-        if (hourlyPlotState) drawHourlyChart(hourlyPlotState.points);
-      });
-    }
-
-    function observeResize() {
-      if ('ResizeObserver' in window) {
-        ro = new ResizeObserver(() => requestRedraw());
-        ro.observe(els.chartWrap);
-      } else {
-        window.addEventListener('resize', requestRedraw, { passive: true });
-        window.addEventListener('orientationchange', requestRedraw, { passive: true });
-      }
-    }
-
-    // ===== Data load =====
-    async function loadAll() {
-      els.refresh.disabled = true;
-      setStatus('Contacting weather.gov…');
-
-      try {
-        // 1) Points
-        const pointsUrl = `https://api.weather.gov/points/${LAT},${LON}`;
-        const points = await fetchJson(pointsUrl);
-        const props = points.properties || {};
-        const rel = props.relativeLocation?.properties;
-        els.place.textContent = rel?.city && rel?.state
-          ? `${rel.city}, ${rel.state} (ZIP ${ZIP})`
-          : `ZIP ${ZIP} (~${LAT}, ${LON})`;
-
-        // 2) Observation station + latest observation
-        const stationsUrl = props.observationStations;
-        const stations = await fetchJson(stationsUrl);
-        const s0 = stations.features?.[0];
-        const stationId = s0?.properties?.stationIdentifier || s0?.id?.split('/').pop();
-        els.station.textContent = s0?.properties?.name || stationId || '—';
-
-        const latestUrl = `https://api.weather.gov/stations/${stationId}/observations/latest?require_qc=true`;
-        els.obsApiLink.href = latestUrl;
-        const latest = await fetchJson(latestUrl);
-        const lp = latest.properties || {};
-        let tempC = (lp.temperature && typeof lp.temperature.value === 'number') ? lp.temperature.value : null;
-
-        if (tempC === null) {
-          const recentUrl = `https://api.weather.gov/stations/${stationId}/observations?limit=5`;
-          const recent = await fetchJson(recentUrl);
-          const withTemp = recent.features?.find(f => f?.properties?.temperature?.value != null);
-          if (withTemp) tempC = withTemp.properties.temperature.value;
-        }
-        if (tempC != null) { els.temp.textContent = `${Math.round((tempC * 9/5) + 32)}`; els.unit.textContent = '°F'; }
-        els.observed.textContent = lp.timestamp ? fmtDateTime.format(new Date(lp.timestamp)) : 'Time unavailable';
-
-        // 3) 7-day
-        els.dailyApiLink.href = props.forecast;
-        const daily = await fetchJson(props.forecast);
-        const periods = daily.properties?.periods || [];
-        const days = [];
-        const seen = new Set();
-        for (const p of periods) {
-          const k = new Date(p.startTime).toDateString();
-          if (!seen.has(k)) { days.push(p); seen.add(k); }
-          if (days.length >= 7) break;
-        }
-        els.days.innerHTML = '';
-        days.forEach(p => els.days.appendChild(makeDayCard(p)));
-
-        // 4) Hourly next 24 → graph
-        els.hourlyApiLink.href = props.forecastHourly;
-        const hourly = await fetchJson(props.forecastHourly);
-        const h = (hourly.properties?.periods || []).slice(0, 24);
-        const pts = h.map(p => ({
-          time: new Date(p.startTime),
-          temp: p.temperatureUnit === 'F' ? p.temperature : Math.round((p.temperature * 9/5) + 32),
-          short: p.shortForecast || ''
-        }));
-        drawHourlyChart(pts);
-
-        setStatus('Live data loaded.', 'ok');
-      } catch (e) {
-        console.error(e);
-        setStatus(`Unable to load data: ${e.message}`, 'err');
-      } finally {
-        els.refresh.disabled = false;
-      }
-    }
-
-    // Bootstrap
-    document.getElementById('refreshBtn').addEventListener('click', loadAll, { passive: true });
-    attachMobileTooltip();
-    observeResize();
-    window.addEventListener('orientationchange', () => setTimeout(requestRedraw, 250), { passive: true });
-    loadAll();
-  </script>
+</script>
 </body>
 </html>
