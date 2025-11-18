@@ -7,6 +7,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <!-- If you add icon-180.png to your repo root, iOS will use it for the Home Screen icon. -->
   <style>
     :root { color-scheme: dark; --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3; --wind:#ffd27a; }
     html,body{height:100%;margin:0;background:var(--bg);color:#e6eef7;font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji",sans-serif;-webkit-text-size-adjust:100%}
@@ -20,7 +23,7 @@
     .choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
     .choice{background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.18);border-radius:16px;padding:16px;cursor:pointer;text-align:center;font-weight:700}
     .choice:hover{border-style:solid}
-    .zipgrid{display:grid;grid-template-columns:1fr auto auto;gap:10px;margin-top:12px}
+    .zipgrid{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;margin-top:12px}
     .input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:12px 14px;color:#e6eef7;font-size:16px}
     .muted{color:var(--muted)}
     .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -42,6 +45,13 @@
     .kbox{width:14px;height:3px;border-radius:2px;display:inline-block;background:var(--accent)}
     .kbox.wind{background:var(--wind)}
     @media (max-width:900px){.choices{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}.grid-7{grid-template-columns:repeat(3,minmax(0,1fr))}.chart-wrap{height:280px}.temp{font-size:40px}}
+
+    /* Install modal */
+    .modalBack{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:saturate(120%) blur(2px);display:none;align-items:center;justify-content:center;z-index:9999}
+    .modal{background:var(--card);border:1px solid rgba(255,255,255,.12);border-radius:18px;max-width:520px;width:92%;padding:16px 16px 12px}
+    .modal h3{margin:0 0 8px}
+    .modal ol{margin:8px 0 0 18px}
+    .right{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
   </style>
 </head>
 <body>
@@ -50,6 +60,7 @@
   <div id="view-home" class="card">
     <div class="title">
       <h1>Pick a place</h1>
+      <button class="btn" id="installBtn" title="Add to Home Screen">Install</button>
     </div>
     <div class="choices">
       <div class="choice" data-place="queencreek">Queen Creek, AZ<br><span class="muted">ZIP 85142</span></div>
@@ -63,8 +74,9 @@
         <input id="zipInput" class="input" inputmode="numeric" pattern="[0-9]*" minlength="5" maxlength="5" placeholder="Enter 5-digit ZIP (e.g., 85142)" />
         <button class="btn" type="submit">Go</button>
         <button class="btn" type="button" id="geoBtn" title="Use your phone location">Your location</button>
+        <button class="btn" type="button" id="installBtn2" title="Add to Home Screen">Install</button>
       </form>
-      <div id="zipMsg" class="muted" style="margin-top:8px;font-size:13px">ZIP uses Zippopotam.us; “Your location” uses your device GPS (Safari will ask permission).</div>
+      <div id="zipMsg" class="muted" style="margin-top:8px;font-size:13px">ZIP uses Zippopotam.us; “Your location” uses your device GPS.</div>
     </div>
 
     <div class="muted" style="margin-top:10px">
@@ -79,6 +91,7 @@
       <div class="row">
         <button class="btn" id="backBtn">◀︎ Places</button>
         <button class="btn" id="refreshBtn">Refresh</button>
+        <button class="btn" id="installBtn3" title="Add to Home Screen">Install</button>
       </div>
     </div>
 
@@ -140,12 +153,56 @@
   </div>
 </div>
 
+<!-- Install modal (shows iPhone instructions or triggers Android prompt) -->
+<div id="installModalBack" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="installTitle">
+  <div class="modal">
+    <h3 id="installTitle">Add to Home Screen</h3>
+    <div id="installContent" class="muted">
+      <!-- Filled dynamically per platform -->
+    </div>
+    <div class="right">
+      <button class="btn" id="installClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
+/* -------------------- PWA manifest (for Android Chrome) --------------------
+   We generate it on the fly so this stays one-file. If you later add a real
+   manifest.json and icons, you can remove this block and reference it directly.
+-------------------------------------------------------------------------- */
+(function bootstrapManifest(){
+  const manifest = {
+    name: "Weather + Solunar",
+    short_name: "Weather",
+    start_url: "./",
+    display: "standalone",
+    background_color: "#0b1220",
+    theme_color: "#0b1220",
+    icons: [
+      { src: "icon-180.png", sizes: "180x180", type: "image/png", purpose: "any" }
+    ]
+  };
+  const blob = new Blob([JSON.stringify(manifest)], {type:'application/manifest+json'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('link');
+  link.rel = 'manifest';
+  link.href = url;
+  document.head.appendChild(link);
+})();
+
 /* -------------------- GLOBALS -------------------- */
 let hourlyPlotState = null;
 let currentPlaceKey = null;
 let currentPlace = null;
 let runningController = null;
+let deferredPrompt = null; // for Android beforeinstallprompt
+
+/* capture Android install prompt event */
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e; // show later on "Install" button press
+});
 
 /* -------------------- Static places -------------------- */
 const PLACES = {
@@ -179,8 +236,55 @@ const els = {
   zipForm: document.getElementById('zipForm'),
   zipInput: document.getElementById('zipInput'),
   geoBtn: document.getElementById('geoBtn'),
-  zipMsg: document.getElementById('zipMsg')
+  zipMsg: document.getElementById('zipMsg'),
+  installButtons: [document.getElementById('installBtn'), document.getElementById('installBtn2'), document.getElementById('installBtn3')],
+  modalBack: document.getElementById('installModalBack'),
+  modalClose: document.getElementById('installClose'),
+  installContent: document.getElementById('installContent')
 };
+
+/* -------------------- Platform detect -------------------- */
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+const isiOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+/* -------------------- Install UX -------------------- */
+els.installButtons.forEach(btn => btn && btn.addEventListener('click', installApp, { passive: true }));
+els.modalClose.addEventListener('click', () => els.modalBack.style.display = 'none', { passive: true });
+
+function installApp(){
+  if (isStandalone) {
+    showInstallHelp(`<p class="muted">Already on your Home Screen.</p>`);
+    return;
+  }
+  // Android/Chrome: use the captured beforeinstallprompt
+  if (!isiOS && deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.finally(() => { deferredPrompt = null; });
+    return;
+  }
+  // iOS (Safari): show quick instructions (cannot be triggered programmatically)
+  if (isiOS && isSafari) {
+    showInstallHelp(`
+      <ol>
+        <li>Tap the <strong>Share</strong> button in Safari (square with arrow).</li>
+        <li>Choose <strong>Add to Home Screen</strong>.</li>
+        <li>Tap <strong>Add</strong>.</li>
+      </ol>
+      <p class="muted" style="margin-top:8px">Tip: If you don’t see it, scroll the sheet up to reveal more actions.</p>
+    `);
+    return;
+  }
+  // Fallback: generic instructions
+  showInstallHelp(`
+    <p>Use your browser’s “Install app” / “Add to Home Screen” option.</p>
+  `);
+}
+
+function showInstallHelp(html){
+  els.installContent.innerHTML = html;
+  els.modalBack.style.display = 'flex';
+}
 
 /* -------------------- Interactions -------------------- */
 document.querySelectorAll('.choice').forEach(el => {
@@ -210,14 +314,10 @@ els.zipForm.addEventListener('submit', async (e) => {
 
 els.geoBtn.addEventListener('click', () => {
   els.zipMsg.textContent = 'Requesting your location…';
-  if (!navigator.geolocation) {
-    els.zipMsg.textContent = 'Geolocation not available in this browser.';
-    return;
-  }
-  navigator.geolocation.getCurrentPosition(async (pos) => {
+  if (!navigator.geolocation) { els.zipMsg.textContent = 'Geolocation not available in this browser.'; return; }
+  navigator.geolocation.getCurrentPosition((pos) => {
     const { latitude, longitude } = pos.coords;
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    // Label will be refined after NWS points returns city/state
     openDynamicPlace({ key:`geo:${latitude.toFixed(4)},${longitude.toFixed(4)}`, label:'Your Location', lat: latitude, lon: longitude, tz });
   }, (err) => {
     els.zipMsg.textContent = `Location error: ${err.message}`;
@@ -307,7 +407,7 @@ function cancelInFlight() {
   return runningController;
 }
 
-/* -------------------- Day card (adds wind) -------------------- */
+/* -------------------- Day card (temp + wind) -------------------- */
 function dayCard(period) {
   const div = document.createElement('div');
   div.className = 'day';
@@ -339,7 +439,6 @@ function drawHourly(points){
   const { ctx, W, H } = setupCanvas();
   ctx.clearRect(0,0,W,H);
   const pad = { l:50, r:44, t:14, b:34 };
-  // axes baseline when empty
   if (!points || points.length === 0) {
     ctx.strokeStyle = 'rgba(230,238,247,0.12)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(pad.l, H-pad.b); ctx.lineTo(W-pad.r, H-pad.b); ctx.stroke();
@@ -347,38 +446,33 @@ function drawHourly(points){
     return;
   }
   const chartW = W - pad.l - pad.r, chartH = H - pad.t - pad.b;
-
   const temps = points.map(p=>p.temp).filter(Number.isFinite);
   const winds = points.map(p=>p.wind).filter(Number.isFinite);
-
   const tMin = Math.min(...temps), tMax = Math.max(...temps);
-  const wMin = 0, wMax = Math.max(5, Math.max(...winds)); // wind floor 0..max
-
+  const wMin = 0, wMax = Math.max(5, Math.max(...winds));
   const tRange = Math.max(4, tMax - tMin);
   const yTmin = Math.floor(tMin - Math.max(2, tRange*0.1));
   const yTmax = Math.ceil(tMax + Math.max(2, tRange*0.1));
-
   const x = i => pad.l + (i/(points.length-1))*chartW;
-  const yT = v => pad.t + (1 - (v - yTmin)/(yTmax - yTmin))*chartH;     // Temp axis (left)
-  const yW = v => pad.t + (1 - (v - wMin)/(wMax - wMin))*chartH;        // Wind axis (right)
+  const yT = v => pad.t + (1 - (v - yTmin)/(yTmax - yTmin))*chartH;
+  const yW = v => pad.t + (1 - (v - wMin)/(wMax - wMin))*chartH;
 
-  // grid (horizontal)
+  // grid
   ctx.strokeStyle = 'rgba(230,238,247,0.12)'; ctx.lineWidth = 1; ctx.beginPath();
   const tStep = niceStep((yTmax - yTmin)/6);
   for (let v=Math.ceil(yTmin/tStep)*tStep; v<=yTmax; v+=tStep){ const yy=yT(v); ctx.moveTo(pad.l,yy); ctx.lineTo(W-pad.r,yy); }
   ctx.stroke();
 
-  // y labels (left: temp)
+  // y labels left: temp
   ctx.fillStyle = '#9fb3c8'; ctx.font = '12px -apple-system, Segoe UI, Roboto, Helvetica, Arial';
   ctx.textAlign='right'; ctx.textBaseline='middle';
   for (let v=Math.ceil(yTmin/tStep)*tStep; v<=yTmax; v+=tStep){ ctx.fillText(`${Math.round(v)}°F`, pad.l-8, yT(v)); }
-
-  // y labels (right: wind)
+  // y labels right: wind
   const wStep = niceStep((wMax - wMin)/5);
   ctx.textAlign='left';
   for (let v=Math.ceil(wMin/wStep)*wStep; v<=wMax; v+=wStep){ ctx.fillText(`${Math.round(v)} mph`, W - pad.r + 8, yW(v)); }
 
-  // x labels each 3 hours
+  // x labels
   ctx.textAlign='center'; ctx.textBaseline='top';
   for (let i=0;i<points.length;i+=3){ ctx.fillText(hourLabel(points[i].time), x(i), H - pad.b + 8); }
 
@@ -386,7 +480,6 @@ function drawHourly(points){
   ctx.beginPath();
   for (let i=0;i<points.length;i++){ const xx=x(i), yy=yT(points[i].temp); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
   ctx.strokeStyle = '#6ee7ff'; ctx.lineWidth = 2.25; ctx.stroke();
-  // temp points
   ctx.fillStyle = '#e6eef7';
   for (let i=0;i<points.length;i++){ const xx=x(i), yy=yT(points[i].temp); ctx.beginPath(); ctx.arc(xx,yy,3,0,Math.PI*2); ctx.fill(); }
 
@@ -394,7 +487,7 @@ function drawHourly(points){
   ctx.beginPath();
   for (let i=0;i<points.length;i++){ const xx=x(i), yy=yW(points[i].wind); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
   ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--wind') || '#ffd27a';
-  ctx.lineWidth = 2; ctx.setLineDash([4,3]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.setLineDash([4,3]); ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
 
   hourlyPlotState = { x, yT, yW, points };
 }
@@ -427,7 +520,7 @@ function nearestPoint(px,py){
   window.addEventListener('resize', ()=>{ if(hourlyPlotState) drawHourly(hourlyPlotState.points); }, {passive:true});
 })();
 
-/* -------------------- Local solunar (same as before) -------------------- */
+/* -------------------- Local solunar -------------------- */
 function toDateInTZ(tz, d=new Date()){
   const parts = new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d)
     .reduce((a,c)=>{a[c.type]=c.value;return a;},{});
@@ -457,12 +550,8 @@ function solunarWindows(date0, lat, lon, tz){
 
 /* -------------------- Utilities -------------------- */
 function parseWindMph(str){
-  // Examples: "5 mph", "10 to 15 mph", "15 mph", "Light", null
-  if (!str) return NaN;
-  const nums = (str.match(/\d+/g) || []).map(n=>parseInt(n,10));
+  const nums = (str && str.match(/\d+/g)) ? str.match(/\d+/g).map(n=>parseInt(n,10)) : [];
   if (nums.length === 0) return NaN;
-  if (nums.length === 1) return nums[0];
-  // take the higher value for the next-hour gust potential
   return Math.max(...nums);
 }
 
