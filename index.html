@@ -23,17 +23,21 @@
     .choice{background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.18);border-radius:16px;padding:16px;cursor:pointer;text-align:center;font-weight:700}
     .choice:hover{border-style:solid}
 
-    /* ZIP + buttons layout with grid areas; on phones "Your location" drops under the ZIP box */
+    /* ZIP + buttons layout:
+       "Go" stays to the right of the ZIP field.
+       "Your location" is a full-width row UNDER the ZIP field on all screen sizes. */
     .zipgrid{
       display:grid;
-      grid-template-columns:1fr auto auto auto;
-      grid-template-areas:"zip go geo install";
+      grid-template-columns:1fr auto;
+      grid-template-areas:
+        "zip go"
+        "geo geo";
       gap:10px;margin-top:12px
     }
     #zipInput{grid-area:zip}
     #zipGo{grid-area:go}
-    #geoBtn{grid-area:geo}
-    #installBtn2{grid-area:install}
+    #geoBtn{grid-area:geo;width:100%}
+
     .input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:12px 14px;color:#e6eef7;font-size:16px}
 
     .muted{color:var(--muted)}
@@ -56,21 +60,12 @@
     .kbox{width:14px;height:3px;border-radius:2px;display:inline-block;background:var(--accent)}
     .kbox.wind{background:var(--wind)}
 
-    /* Phone: stack geo under ZIP, make it full width for easy tap */
     @media (max-width:900px){
       .choices{grid-template-columns:1fr}
       .grid-3{grid-template-columns:1fr}
       .grid-7{grid-template-columns:repeat(3,minmax(0,1fr))}
       .chart-wrap{height:280px}
       .temp{font-size:40px}
-      .zipgrid{
-        grid-template-columns:1fr auto;
-        grid-template-areas:
-          "zip go"
-          "geo geo"
-          "install install";
-      }
-      #geoBtn, #installBtn2{width:100%}
     }
 
     /* Install modal */
@@ -87,6 +82,7 @@
   <div id="view-home" class="card">
     <div class="title">
       <h1>Pick a place</h1>
+      <!-- Install ONLY here (top-right) -->
       <button class="btn" id="installBtn" title="Add to Home Screen">Install</button>
     </div>
     <div class="choices">
@@ -101,7 +97,6 @@
         <input id="zipInput" class="input" inputmode="numeric" pattern="[0-9]*" minlength="5" maxlength="5" placeholder="Enter 5-digit ZIP (e.g., 85142)" />
         <button class="btn" id="zipGo" type="submit">Go</button>
         <button class="btn" type="button" id="geoBtn" title="Use your phone location">Your location</button>
-        <button class="btn" type="button" id="installBtn2" title="Add to Home Screen">Install</button>
       </form>
       <div id="zipMsg" class="muted" style="margin-top:8px;font-size:13px">ZIP uses Zippopotam.us; “Your location” uses your device GPS.</div>
     </div>
@@ -118,7 +113,7 @@
       <div class="row">
         <button class="btn" id="backBtn">◀︎ Places</button>
         <button class="btn" id="refreshBtn">Refresh</button>
-        <button class="btn" id="installBtn3" title="Add to Home Screen">Install</button>
+        <!-- No Install button here per request -->
       </div>
     </div>
 
@@ -225,7 +220,6 @@ const els = {
   observed: document.getElementById('observed'),
   station: document.getElementById('station'),
   days: document.getElementById('days'),
-  chartWrap: document.getElementById('chartWrap'),
   canvas: document.getElementById('hourlyChart'),
   tooltip: document.getElementById('tooltip'),
   status: document.getElementById('status'),
@@ -239,7 +233,7 @@ const els = {
   zipGo: document.getElementById('zipGo'),
   geoBtn: document.getElementById('geoBtn'),
   zipMsg: document.getElementById('zipMsg'),
-  installButtons: [document.getElementById('installBtn'), document.getElementById('installBtn2'), document.getElementById('installBtn3')],
+  installBtn: document.getElementById('installBtn'),
   modalBack: document.getElementById('installModalBack'),
   modalClose: document.getElementById('installClose'),
   installContent: document.getElementById('installContent')
@@ -250,7 +244,7 @@ const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
 const isiOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
-els.installButtons.forEach(b => b && b.addEventListener('click', installApp, {passive:true}));
+els.installBtn.addEventListener('click', installApp, {passive:true});
 els.modalClose.addEventListener('click', ()=> els.modalBack.style.display='none', {passive:true});
 
 function installApp(){
@@ -317,7 +311,7 @@ function openDetail(key, place){
   els.home.style.display='none'; els.detail.style.display=''; history.replaceState({}, '', `#/${encodeURIComponent(key)}`);
   loadAll(place).catch(err => setStatus(`Load failed: ${err.message}`, 'err'));
 }
-if (location.hash.startsWith('#/')) { const k=decodeURIComponent(location.hash.slice(2)); if (PLACES[k]) openPlace(k); }
+if (location.hash.startsWith('#/')) { const k=decodeURIComponent(location.hash.slice(2)); if(PLACES[k]) openPlace(k); }
 
 /* -------------------- Reset detail -------------------- */
 function resetDetail(place){
