@@ -9,7 +9,6 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#0b1220" />
   <link rel="apple-touch-icon" href="icon-180.png" />
-  <!-- If you add icon-180.png to your repo root, iOS will use it for the Home Screen icon. -->
   <style>
     :root { color-scheme: dark; --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3; --wind:#ffd27a; }
     html,body{height:100%;margin:0;background:var(--bg);color:#e6eef7;font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji",sans-serif;-webkit-text-size-adjust:100%}
@@ -23,8 +22,20 @@
     .choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
     .choice{background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.18);border-radius:16px;padding:16px;cursor:pointer;text-align:center;font-weight:700}
     .choice:hover{border-style:solid}
-    .zipgrid{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;margin-top:12px}
+
+    /* ZIP + buttons layout with grid areas; on phones "Your location" drops under the ZIP box */
+    .zipgrid{
+      display:grid;
+      grid-template-columns:1fr auto auto auto;
+      grid-template-areas:"zip go geo install";
+      gap:10px;margin-top:12px
+    }
+    #zipInput{grid-area:zip}
+    #zipGo{grid-area:go}
+    #geoBtn{grid-area:geo}
+    #installBtn2{grid-area:install}
     .input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:12px 14px;color:#e6eef7;font-size:16px}
+
     .muted{color:var(--muted)}
     .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
     .grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:10px}
@@ -44,7 +55,23 @@
     .key{display:inline-flex;align-items:center;gap:6px}
     .kbox{width:14px;height:3px;border-radius:2px;display:inline-block;background:var(--accent)}
     .kbox.wind{background:var(--wind)}
-    @media (max-width:900px){.choices{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}.grid-7{grid-template-columns:repeat(3,minmax(0,1fr))}.chart-wrap{height:280px}.temp{font-size:40px}}
+
+    /* Phone: stack geo under ZIP, make it full width for easy tap */
+    @media (max-width:900px){
+      .choices{grid-template-columns:1fr}
+      .grid-3{grid-template-columns:1fr}
+      .grid-7{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .chart-wrap{height:280px}
+      .temp{font-size:40px}
+      .zipgrid{
+        grid-template-columns:1fr auto;
+        grid-template-areas:
+          "zip go"
+          "geo geo"
+          "install install";
+      }
+      #geoBtn, #installBtn2{width:100%}
+    }
 
     /* Install modal */
     .modalBack{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:saturate(120%) blur(2px);display:none;align-items:center;justify-content:center;z-index:9999}
@@ -72,7 +99,7 @@
       <h2 style="margin:0 0 8px">Or jump to any U.S. ZIP</h2>
       <form id="zipForm" class="zipgrid">
         <input id="zipInput" class="input" inputmode="numeric" pattern="[0-9]*" minlength="5" maxlength="5" placeholder="Enter 5-digit ZIP (e.g., 85142)" />
-        <button class="btn" type="submit">Go</button>
+        <button class="btn" id="zipGo" type="submit">Go</button>
         <button class="btn" type="button" id="geoBtn" title="Use your phone location">Your location</button>
         <button class="btn" type="button" id="installBtn2" title="Add to Home Screen">Install</button>
       </form>
@@ -153,56 +180,30 @@
   </div>
 </div>
 
-<!-- Install modal (shows iPhone instructions or triggers Android prompt) -->
+<!-- Install modal -->
 <div id="installModalBack" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="installTitle">
   <div class="modal">
     <h3 id="installTitle">Add to Home Screen</h3>
-    <div id="installContent" class="muted">
-      <!-- Filled dynamically per platform -->
-    </div>
-    <div class="right">
-      <button class="btn" id="installClose">Close</button>
-    </div>
+    <div id="installContent" class="muted"></div>
+    <div class="right"><button class="btn" id="installClose">Close</button></div>
   </div>
 </div>
 
 <script>
-/* -------------------- PWA manifest (for Android Chrome) --------------------
-   We generate it on the fly so this stays one-file. If you later add a real
-   manifest.json and icons, you can remove this block and reference it directly.
--------------------------------------------------------------------------- */
-(function bootstrapManifest(){
+/* Inline manifest for Android install */
+(function(){
   const manifest = {
-    name: "Weather + Solunar",
-    short_name: "Weather",
-    start_url: "./",
-    display: "standalone",
-    background_color: "#0b1220",
-    theme_color: "#0b1220",
-    icons: [
-      { src: "icon-180.png", sizes: "180x180", type: "image/png", purpose: "any" }
-    ]
+    name:"Weather + Solunar", short_name:"Weather", start_url:"./", display:"standalone",
+    background_color:"#0b1220", theme_color:"#0b1220",
+    icons:[{src:"icon-180.png",sizes:"180x180",type:"image/png"}]
   };
-  const blob = new Blob([JSON.stringify(manifest)], {type:'application/manifest+json'});
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('link');
-  link.rel = 'manifest';
-  link.href = url;
-  document.head.appendChild(link);
+  const url = URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/manifest+json'}));
+  const link=document.createElement('link'); link.rel='manifest'; link.href=url; document.head.appendChild(link);
 })();
 
 /* -------------------- GLOBALS -------------------- */
-let hourlyPlotState = null;
-let currentPlaceKey = null;
-let currentPlace = null;
-let runningController = null;
-let deferredPrompt = null; // for Android beforeinstallprompt
-
-/* capture Android install prompt event */
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e; // show later on "Install" button press
-});
+let hourlyPlotState = null, currentPlaceKey = null, currentPlace = null, runningController = null, deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; });
 
 /* -------------------- Static places -------------------- */
 const PLACES = {
@@ -235,6 +236,7 @@ const els = {
   minorTimes: document.getElementById('minorTimes'),
   zipForm: document.getElementById('zipForm'),
   zipInput: document.getElementById('zipInput'),
+  zipGo: document.getElementById('zipGo'),
   geoBtn: document.getElementById('geoBtn'),
   zipMsg: document.getElementById('zipMsg'),
   installButtons: [document.getElementById('installBtn'), document.getElementById('installBtn2'), document.getElementById('installBtn3')],
@@ -243,60 +245,28 @@ const els = {
   installContent: document.getElementById('installContent')
 };
 
-/* -------------------- Platform detect -------------------- */
+/* -------------------- Platform + install UX -------------------- */
 const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 const isiOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
-/* -------------------- Install UX -------------------- */
-els.installButtons.forEach(btn => btn && btn.addEventListener('click', installApp, { passive: true }));
-els.modalClose.addEventListener('click', () => els.modalBack.style.display = 'none', { passive: true });
+els.installButtons.forEach(b => b && b.addEventListener('click', installApp, {passive:true}));
+els.modalClose.addEventListener('click', ()=> els.modalBack.style.display='none', {passive:true});
 
 function installApp(){
-  if (isStandalone) {
-    showInstallHelp(`<p class="muted">Already on your Home Screen.</p>`);
-    return;
-  }
-  // Android/Chrome: use the captured beforeinstallprompt
-  if (!isiOS && deferredPrompt) {
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.finally(() => { deferredPrompt = null; });
-    return;
-  }
-  // iOS (Safari): show quick instructions (cannot be triggered programmatically)
+  if (isStandalone) { showInstallHelp(`<p class="muted">Already on your Home Screen.</p>`); return; }
+  if (!isiOS && deferredPrompt) { deferredPrompt.prompt(); deferredPrompt.userChoice.finally(()=> deferredPrompt=null); return; }
   if (isiOS && isSafari) {
-    showInstallHelp(`
-      <ol>
-        <li>Tap the <strong>Share</strong> button in Safari (square with arrow).</li>
-        <li>Choose <strong>Add to Home Screen</strong>.</li>
-        <li>Tap <strong>Add</strong>.</li>
-      </ol>
-      <p class="muted" style="margin-top:8px">Tip: If you don’t see it, scroll the sheet up to reveal more actions.</p>
-    `);
+    showInstallHelp(`<ol><li>Tap the <strong>Share</strong> button in Safari.</li><li>Choose <strong>Add to Home Screen</strong>.</li><li>Tap <strong>Add</strong>.</li></ol>`);
     return;
   }
-  // Fallback: generic instructions
-  showInstallHelp(`
-    <p>Use your browser’s “Install app” / “Add to Home Screen” option.</p>
-  `);
+  showInstallHelp(`<p>Use your browser’s “Install app” / “Add to Home Screen”.</p>`);
 }
-
-function showInstallHelp(html){
-  els.installContent.innerHTML = html;
-  els.modalBack.style.display = 'flex';
-}
+function showInstallHelp(html){ els.installContent.innerHTML=html; els.modalBack.style.display='flex'; }
 
 /* -------------------- Interactions -------------------- */
-document.querySelectorAll('.choice').forEach(el => {
-  el.addEventListener('click', () => openPlace(el.dataset.place), { passive: true });
-});
-
-els.back.addEventListener('click', () => {
-  cancelInFlight();
-  els.detail.style.display = 'none';
-  els.home.style.display = '';
-  history.replaceState({}, '', '#/');
-}, { passive: true });
+document.querySelectorAll('.choice').forEach(el => el.addEventListener('click', ()=>openPlace(el.dataset.place), {passive:true}));
+els.back.addEventListener('click', ()=>{ cancelInFlight(); els.detail.style.display='none'; els.home.style.display=''; history.replaceState({}, '', '#/'); }, {passive:true});
 
 els.zipForm.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -307,9 +277,7 @@ els.zipForm.addEventListener('submit', async (e) => {
     const info = await lookupZip(zip);
     const label = `${info.placeName}, ${info.stateAbbr} · ${zip}`;
     openDynamicPlace({ key: `zip:${zip}`, label, lat: info.lat, lon: info.lon, tz: guessTZ(info.stateAbbr, info.lat, info.lon) });
-  } catch (err) {
-    els.zipMsg.textContent = `ZIP lookup failed: ${err.message}`;
-  }
+  } catch (err) { els.zipMsg.textContent = `ZIP lookup failed: ${err.message}`; }
 });
 
 els.geoBtn.addEventListener('click', () => {
@@ -319,342 +287,181 @@ els.geoBtn.addEventListener('click', () => {
     const { latitude, longitude } = pos.coords;
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     openDynamicPlace({ key:`geo:${latitude.toFixed(4)},${longitude.toFixed(4)}`, label:'Your Location', lat: latitude, lon: longitude, tz });
-  }, (err) => {
-    els.zipMsg.textContent = `Location error: ${err.message}`;
-  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+  }, (err) => { els.zipMsg.textContent = `Location error: ${err.message}`; }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
 }, { passive: true });
 
 /* -------------------- ZIP geocoder -------------------- */
-async function lookupZip(zip) {
-  const url = `https://api.zippopotam.us/us/${zip}`;
-  const res = await fetch(url);
+async function lookupZip(zip){
+  const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
   if (!res.ok) throw new Error(`No data for ${zip}`);
-  const j = await res.json();
-  const p = j.places && j.places[0];
+  const j = await res.json(); const p = j.places && j.places[0];
   if (!p) throw new Error('Malformed ZIP data');
-  return {
-    lat: parseFloat(p.latitude),
-    lon: parseFloat(p.longitude),
-    placeName: p['place name'],
-    stateAbbr: p['state abbreviation']
-  };
+  return { lat: parseFloat(p.latitude), lon: parseFloat(p.longitude), placeName: p['place name'], stateAbbr: p['state abbreviation'] };
 }
-function guessTZ(stateAbbr, lat, lon) {
-  const pacific = ['CA','WA','OR','NV'];
-  const mountain = ['AZ','UT','CO','NM','MT','WY','ID'];
-  if (stateAbbr === 'AZ') return 'America/Phoenix';
+function guessTZ(stateAbbr, lat, lon){
+  const pacific=['CA','WA','OR','NV'], mountain=['AZ','UT','CO','NM','MT','WY','ID'];
+  if (stateAbbr==='AZ') return 'America/Phoenix';
   if (pacific.includes(stateAbbr)) return 'America/Los_Angeles';
   if (mountain.includes(stateAbbr)) return 'America/Denver';
-  if (lon <= -112) return 'America/Los_Angeles';
-  if (lon <= -97)  return 'America/Denver';
-  if (lon <= -85)  return 'America/Chicago';
+  if (lon<=-112) return 'America/Los_Angeles';
+  if (lon<=-97) return 'America/Denver';
+  if (lon<=-85) return 'America/Chicago';
   return 'America/New_York';
 }
 
 /* -------------------- View handling -------------------- */
-function openPlace(key) { openDetail(key, PLACES[key]); }
-function openDynamicPlace(p) { openDetail(p.key, p); }
-
-function openDetail(key, place) {
-  cancelInFlight();
-  currentPlaceKey = key;
-  currentPlace = place;
-  resetDetail(place);                  // dashes instantly
-  els.home.style.display = 'none';
-  els.detail.style.display = '';
-  history.replaceState({}, '', `#/${encodeURIComponent(key)}`);
+function openPlace(key){ openDetail(key, PLACES[key]); }
+function openDynamicPlace(p){ openDetail(p.key, p); }
+function openDetail(key, place){
+  cancelInFlight(); currentPlaceKey=key; currentPlace=place; resetDetail(place);
+  els.home.style.display='none'; els.detail.style.display=''; history.replaceState({}, '', `#/${encodeURIComponent(key)}`);
   loadAll(place).catch(err => setStatus(`Load failed: ${err.message}`, 'err'));
 }
+if (location.hash.startsWith('#/')) { const k=decodeURIComponent(location.hash.slice(2)); if (PLACES[k]) openPlace(k); }
 
-if (location.hash.startsWith('#/')) {
-  const k = decodeURIComponent(location.hash.slice(2));
-  if (PLACES[k]) openPlace(k);
-}
-
-/* -------------------- Reset detail (dashes) -------------------- */
-function resetDetail(place) {
+/* -------------------- Reset detail -------------------- */
+function resetDetail(place){
   els.placeTitle.textContent = place.label || '—';
   els.placeMeta.textContent  = `${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz || '—'}`;
-  els.temp.textContent = '—';
-  els.unit.textContent = '°F';
-  els.observed.textContent = 'Observed —';
-  els.station.textContent = '—';
-  els.days.innerHTML = '';
-  drawHourly([]);                      // clear chart
-  els.majorTimes.textContent = '—';
-  els.minorTimes.textContent = '—';
-  els.obsApiLink.href = '#';
-  els.dailyApiLink.href = '#';
-  els.hourlyApiLink.href = '#';
-  setStatus('Loading…');
+  els.temp.textContent='—'; els.unit.textContent='°F'; els.observed.textContent='Observed —'; els.station.textContent='—';
+  els.days.innerHTML=''; drawHourly([]); els.majorTimes.textContent='—'; els.minorTimes.textContent='—';
+  els.obsApiLink.href=els.dailyApiLink.href=els.hourlyApiLink.href='#'; setStatus('Loading…');
 }
 
 /* -------------------- Status -------------------- */
-function setStatus(text, cls) {
-  els.status.textContent = text;
-  els.status.className = 'status ' + (cls || '');
-}
+function setStatus(text, cls){ els.status.textContent=text; els.status.className='status '+(cls||''); }
 
 /* -------------------- Fetch helper with cancel -------------------- */
-async function fetchJson(url, accept='application/geo+json', controller) {
+async function fetchJson(url, accept='application/geo+json', controller){
   const res = await fetch(url, { headers: { 'Accept': accept }, signal: controller?.signal });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return res.json();
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`); return res.json();
 }
-function cancelInFlight() {
-  if (runningController) try { runningController.abort(); } catch {}
-  runningController = new AbortController();
-  return runningController;
-}
+function cancelInFlight(){ if (runningController) try{runningController.abort()}catch{} runningController=new AbortController(); return runningController; }
 
-/* -------------------- Day card (temp + wind) -------------------- */
-function dayCard(period) {
-  const div = document.createElement('div');
-  div.className = 'day';
-  const tempText = period.temperature != null ? `${period.temperature}°${period.temperatureUnit}` : '—';
+/* -------------------- Day card -------------------- */
+function dayCard(period){
+  const div=document.createElement('div'); div.className='day';
+  const tempText = period.temperature!=null ? `${period.temperature}°${period.temperatureUnit}` : '—';
   const windText = (period.windSpeed || '—') + (period.windDirection ? ` ${period.windDirection}` : '');
-  div.innerHTML = `
-    <h3>${period.name || new Date(period.startTime).toLocaleDateString(undefined,{weekday:'short'})}</h3>
-    <div class="t">${tempText}</div>
-    <div class="w">Wind: ${windText}</div>
-    <div class="muted" style="font-size:12px">${period.shortForecast || ''}</div>`;
+  div.innerHTML = `<h3>${period.name || new Date(period.startTime).toLocaleDateString(undefined,{weekday:'short'})}</h3>
+                   <div class="t">${tempText}</div>
+                   <div class="w">Wind: ${windText}</div>
+                   <div class="muted" style="font-size:12px">${period.shortForecast || ''}</div>`;
   return div;
 }
 
 /* -------------------- Canvas chart (Temp + Wind) -------------------- */
-function setupCanvas() {
-  const dpr = window.devicePixelRatio || 1;
-  const cssW = els.canvas.clientWidth || 1100;
-  const cssH = els.canvas.clientHeight || 340;
-  els.canvas.width = Math.round(cssW * dpr);
-  els.canvas.height = Math.round(cssH * dpr);
-  const ctx = els.canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return { ctx, W: cssW, H: cssH };
-}
-function niceStep(raw){ const steps=[1,2,5,10]; const pow=10**Math.floor(Math.log10(raw||1)); for(const s of steps){const v=s*pow; if(raw<=v) return v;} return 10*pow; }
-const hourLabel = d => d.toLocaleTimeString([], { hour: 'numeric' });
+function setupCanvas(){ const dpr=window.devicePixelRatio||1, cssW=els.canvas.clientWidth||1100, cssH=els.canvas.clientHeight||340;
+  els.canvas.width=Math.round(cssW*dpr); els.canvas.height=Math.round(cssH*dpr);
+  const ctx=els.canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); return {ctx,W:cssW,H:cssH}; }
+function niceStep(raw){ const s=[1,2,5,10], pow=10**Math.floor(Math.log10(raw||1)); for(const k of s){const v=k*pow; if(raw<=v) return v;} return 10*pow; }
+const hourLabel = d => d.toLocaleTimeString([], { hour:'numeric' });
 
 function drawHourly(points){
-  const { ctx, W, H } = setupCanvas();
-  ctx.clearRect(0,0,W,H);
-  const pad = { l:50, r:44, t:14, b:34 };
-  if (!points || points.length === 0) {
-    ctx.strokeStyle = 'rgba(230,238,247,0.12)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(pad.l, H-pad.b); ctx.lineTo(W-pad.r, H-pad.b); ctx.stroke();
-    hourlyPlotState = { x:()=>0, yT:()=>0, yW:()=>0, points:[] };
-    return;
-  }
-  const chartW = W - pad.l - pad.r, chartH = H - pad.t - pad.b;
-  const temps = points.map(p=>p.temp).filter(Number.isFinite);
-  const winds = points.map(p=>p.wind).filter(Number.isFinite);
-  const tMin = Math.min(...temps), tMax = Math.max(...temps);
-  const wMin = 0, wMax = Math.max(5, Math.max(...winds));
-  const tRange = Math.max(4, tMax - tMin);
-  const yTmin = Math.floor(tMin - Math.max(2, tRange*0.1));
-  const yTmax = Math.ceil(tMax + Math.max(2, tRange*0.1));
-  const x = i => pad.l + (i/(points.length-1))*chartW;
-  const yT = v => pad.t + (1 - (v - yTmin)/(yTmax - yTmin))*chartH;
-  const yW = v => pad.t + (1 - (v - wMin)/(wMax - wMin))*chartH;
+  const { ctx, W, H } = setupCanvas(); ctx.clearRect(0,0,W,H);
+  const pad={l:50,r:44,t:14,b:34};
+  if(!points||points.length===0){ ctx.strokeStyle='rgba(230,238,247,0.12)'; ctx.beginPath(); ctx.moveTo(pad.l,H-pad.b); ctx.lineTo(W-pad.r,H-pad.b); ctx.stroke(); hourlyPlotState={x:()=>0,yT:()=>0,yW:()=>0,points:[]}; return; }
+  const chartW=W-pad.l-pad.r, chartH=H-pad.t-pad.b;
+  const temps=points.map(p=>p.temp).filter(Number.isFinite), winds=points.map(p=>p.wind).filter(Number.isFinite);
+  const tMin=Math.min(...temps), tMax=Math.max(...temps), wMin=0, wMax=Math.max(5, Math.max(...winds));
+  const tRange=Math.max(4, tMax-tMin), yTmin=Math.floor(tMin - Math.max(2,tRange*0.1)), yTmax=Math.ceil(tMax + Math.max(2,tRange*0.1));
+  const x=i=>pad.l+(i/(points.length-1))*chartW, yT=v=>pad.t+(1-(v-yTmin)/(yTmax-yTmin))*chartH, yW=v=>pad.t+(1-(v-wMin)/(wMax-wMin))*chartH;
 
-  // grid
-  ctx.strokeStyle = 'rgba(230,238,247,0.12)'; ctx.lineWidth = 1; ctx.beginPath();
-  const tStep = niceStep((yTmax - yTmin)/6);
-  for (let v=Math.ceil(yTmin/tStep)*tStep; v<=yTmax; v+=tStep){ const yy=yT(v); ctx.moveTo(pad.l,yy); ctx.lineTo(W-pad.r,yy); }
-  ctx.stroke();
+  ctx.strokeStyle='rgba(230,238,247,0.12)'; ctx.beginPath(); const tStep=niceStep((yTmax-yTmin)/6);
+  for(let v=Math.ceil(yTmin/tStep)*tStep; v<=yTmax; v+=tStep){ const yy=yT(v); ctx.moveTo(pad.l,yy); ctx.lineTo(W-pad.r,yy); } ctx.stroke();
 
-  // y labels left: temp
-  ctx.fillStyle = '#9fb3c8'; ctx.font = '12px -apple-system, Segoe UI, Roboto, Helvetica, Arial';
-  ctx.textAlign='right'; ctx.textBaseline='middle';
-  for (let v=Math.ceil(yTmin/tStep)*tStep; v<=yTmax; v+=tStep){ ctx.fillText(`${Math.round(v)}°F`, pad.l-8, yT(v)); }
-  // y labels right: wind
-  const wStep = niceStep((wMax - wMin)/5);
-  ctx.textAlign='left';
-  for (let v=Math.ceil(wMin/wStep)*wStep; v<=wMax; v+=wStep){ ctx.fillText(`${Math.round(v)} mph`, W - pad.r + 8, yW(v)); }
+  ctx.fillStyle='#9fb3c8'; ctx.font='12px -apple-system, Segoe UI, Roboto, Helvetica, Arial'; ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(let v=Math.ceil(yTmin/tStep)*tStep; v<=yTmax; v+=tStep){ ctx.fillText(`${Math.round(v)}°F`, pad.l-8, yT(v)); }
+  const wStep=niceStep((wMax-wMin)/5); ctx.textAlign='left';
+  for(let v=Math.ceil(wMin/wStep)*wStep; v<=wMax; v+=wStep){ ctx.fillText(`${Math.round(v)} mph`, W-pad.r+8, yW(v)); }
 
-  // x labels
   ctx.textAlign='center'; ctx.textBaseline='top';
-  for (let i=0;i<points.length;i+=3){ ctx.fillText(hourLabel(points[i].time), x(i), H - pad.b + 8); }
+  for(let i=0;i<points.length;i+=3){ ctx.fillText(hourLabel(points[i].time), x(i), H-pad.b+8); }
 
-  // temp line
-  ctx.beginPath();
-  for (let i=0;i<points.length;i++){ const xx=x(i), yy=yT(points[i].temp); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
-  ctx.strokeStyle = '#6ee7ff'; ctx.lineWidth = 2.25; ctx.stroke();
-  ctx.fillStyle = '#e6eef7';
-  for (let i=0;i<points.length;i++){ const xx=x(i), yy=yT(points[i].temp); ctx.beginPath(); ctx.arc(xx,yy,3,0,Math.PI*2); ctx.fill(); }
+  ctx.beginPath(); for(let i=0;i<points.length;i++){ const xx=x(i), yy=yT(points[i].temp); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
+  ctx.strokeStyle='#6ee7ff'; ctx.lineWidth=2.25; ctx.stroke();
+  ctx.fillStyle='#e6eef7'; for(let i=0;i<points.length;i++){ const xx=x(i), yy=yT(points[i].temp); ctx.beginPath(); ctx.arc(xx,yy,3,0,Math.PI*2); ctx.fill(); }
 
-  // wind line
-  ctx.beginPath();
-  for (let i=0;i<points.length;i++){ const xx=x(i), yy=yW(points[i].wind); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
-  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--wind') || '#ffd27a';
-  ctx.setLineDash([4,3]); ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); for(let i=0;i<points.length;i++){ const xx=x(i), yy=yW(points[i].wind); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
+  ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--wind')||'#ffd27a'; ctx.setLineDash([4,3]); ctx.lineWidth=2; ctx.stroke(); ctx.setLineDash([]);
 
-  hourlyPlotState = { x, yT, yW, points };
+  hourlyPlotState={x,yT,yW,points};
 }
-
-function nearestPoint(px,py){
-  if(!hourlyPlotState) return null;
-  const { x, yT, points } = hourlyPlotState;
-  let best=null, bestDist=1e9;
-  for (let i=0;i<points.length;i++){
-    const dx = x(i)-px, dy=yT(points[i].temp)-py, d=Math.hypot(dx,dy);
-    if(d<bestDist){ bestDist=d; best = {i, p:points[i], d}; }
-  }
-  return best;
-}
-(function attachTooltip(){
-  const c = els.canvas, tip = els.tooltip;
-  const show = (clientX, clientY) => {
-    const r = c.getBoundingClientRect();
-    const hit = nearestPoint(clientX - r.left, clientY - r.top);
-    if(!hit || hit.d>28){ tip.style.display='none'; return; }
-    tip.style.display='block';
-    const p = hit.p;
-    tip.textContent = `${hourLabel(p.time)} • ${Math.round(p.temp)}°F • Wind ${Math.round(p.wind)} mph${p.windDir? ' '+p.windDir:''}`;
-    tip.style.left = `${clientX - r.left}px`; tip.style.top = `${clientY - r.top}px`;
-  };
-  c.addEventListener('mousemove', e=>show(e.clientX,e.clientY), {passive:true});
-  c.addEventListener('mouseleave', ()=> tip.style.display='none', {passive:true});
-  c.addEventListener('touchstart', e=>{ const t=e.changedTouches[0]; show(t.clientX,t.clientY); }, {passive:true});
-  c.addEventListener('touchmove', e=>{ const t=e.changedTouches[0]; show(t.clientX,t.clientY); }, {passive:true});
-  window.addEventListener('resize', ()=>{ if(hourlyPlotState) drawHourly(hourlyPlotState.points); }, {passive:true});
+function nearestPoint(px,py){ if(!hourlyPlotState) return null; const {x,yT,points}=hourlyPlotState; let best=null,bd=1e9;
+  for(let i=0;i<points.length;i++){ const dx=x(i)-px, dy=yT(points[i].temp)-py, d=Math.hypot(dx,dy); if(d<bd){bd=d; best={i,p:points[i],d};} } return best; }
+(function(){
+  const c=els.canvas, tip=els.tooltip;
+  const show=(cx,cy)=>{ const r=c.getBoundingClientRect(); const hit=nearestPoint(cx-r.left, cy-r.top);
+    if(!hit||hit.d>28){ tip.style.display='none'; return; }
+    tip.style.display='block'; const p=hit.p;
+    tip.textContent=`${hourLabel(p.time)} • ${Math.round(p.temp)}°F • Wind ${Math.round(p.wind)} mph${p.windDir? ' '+p.windDir:''}`;
+    tip.style.left=`${cx-r.left}px`; tip.style.top=`${cy-r.top}px`; };
+  c.addEventListener('mousemove',e=>show(e.clientX,e.clientY),{passive:true});
+  c.addEventListener('mouseleave',()=>tip.style.display='none',{passive:true});
+  c.addEventListener('touchstart',e=>{const t=e.changedTouches[0];show(t.clientX,t.clientY);},{passive:true});
+  c.addEventListener('touchmove',e=>{const t=e.changedTouches[0];show(t.clientX,t.clientY);},{passive:true});
+  window.addEventListener('resize',()=>{ if(hourlyPlotState) drawHourly(hourlyPlotState.points); },{passive:true});
 })();
 
 /* -------------------- Local solunar -------------------- */
-function toDateInTZ(tz, d=new Date()){
-  const parts = new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d)
-    .reduce((a,c)=>{a[c.type]=c.value;return a;},{});
-  return new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00`);
-}
+function toDateInTZ(tz, d=new Date()){ const p=new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d).reduce((a,c)=>{a[c.type]=c.value;return a;},{}); return new Date(`${p.year}-${p.month}-${p.day}T00:00:00`); }
 function fmtHM(d, tz){ return new Intl.DateTimeFormat([], { timeZone: tz, hour:'2-digit', minute:'2-digit' }).format(d); }
-const PI = Math.PI, sin = Math.sin, cos = Math.cos, tan = Math.tan, asin = Math.asin, atan2 = Math.atan2;
-function rad(x){ return x*PI/180; } function jdFromDate(date){ return date/86400000 + 2440587.5; } function lst(jd, lon){ const d=jd-2451545.0; return ( ( (280.46061837 + 360.98564736629*d) % 360 ) * PI/180 ) + lon; }
-function moonCoords(d) { const L=rad((218.316+13.176396*d)%360), M=rad((134.963+13.064993*d)%360), F=rad((93.272+13.22935*d)%360), e=rad(23.4397); const l=L+rad(6.289)*sin(M); const b=rad(5.128)*sin(F); return { ra: atan2(sin(l)*cos(e)-tan(b)*sin(e), cos(l)), dec: asin(sin(b)*cos(e)+cos(b)*sin(e)*sin(l)) }; }
-function moonPos(date, lat, lon){ const jd=jdFromDate(date), d=jd-2451545.0, mc=moonCoords(d), H=lst(jd,lon)-mc.ra; const alt=asin( sin(lat)*sin(mc.dec) + cos(lat)*cos(mc.dec)*cos(H) ); return { alt }; }
-function getMoonTimes(date0, latDeg, lonDeg){ const lat=rad(latDeg), lon=rad(lonDeg); const start=toDateInTZ('UTC',date0); const result={ rise:null,set:null }; let prevAlt=null, prevT=null; for (let m=0;m<=24*60;m+=10){ const t=new Date(+start+m*60000); const a=moonPos(t,lat,lon).alt - rad(0.125); if(prevAlt!==null){ if(prevAlt<=0 && a>0 && !result.rise) result.rise=new Date((+prevT + +t)/2); if(prevAlt>=0 && a<0 && !result.set) result.set=new Date((+prevT + +t)/2); } prevAlt=a; prevT=t; } return result; }
-function findTransit(date0, latDeg, lonDeg){ const lat=rad(latDeg), lon=rad(lonDeg); const start=toDateInTZ('UTC',date0); let bestAlt=-1e9,bestT=new Date(start); for(let m=0;m<=24*60;m+=5){ const t=new Date(+start+m*60000); const a=moonPos(t,lat,lon).alt; if(a>bestAlt){bestAlt=a;bestT=t;} } return bestT; }
-function solunarWindows(date0, lat, lon, tz){
-  const times = getMoonTimes(date0, lat, lon);
-  const transit = findTransit(date0, lat, lon);
-  const underfoot = new Date(+transit + 12*3600*1000);
-  const major1 = [new Date(+transit - 60*60*1000), new Date(+transit + 60*60*1000)];
-  const major2 = [new Date(+underfoot - 60*60*1000), new Date(+underfoot + 60*60*1000)];
-  const minor = [];
-  if (times.rise) minor.push([new Date(+times.rise - 30*60*1000), new Date(+times.rise + 30*60*1000)]);
-  if (times.set)  minor.push([new Date(+times.set  - 30*60*1000), new Date(+times.set  + 30*60*1000)]);
-  const fmt = r => `${fmtHM(r[0], tz)}–${fmtHM(r[1], tz)}`;
-  const majors = `${fmt(major1)} · ${fmt(major2)}`;
-  const minors = minor.length ? minor.map(fmt).join(' · ') : '—';
-  return { majors, minors };
-}
+const PI=Math.PI, sin=Math.sin, cos=Math.cos, asin=Math.asin, atan2=Math.atan2;
+function rad(x){return x*PI/180} function jdFromDate(date){return date/86400000+2440587.5} function lst(jd,lon){const d=jd-2451545.0;return(((280.46061837+360.98564736629*d)%360)*PI/180)+lon}
+function moonCoords(d){const L=rad((218.316+13.176396*d)%360),M=rad((134.963+13.064993*d)%360),F=rad((93.272+13.22935*d)%360),e=rad(23.4397);const l=L+rad(6.289)*sin(M);const b=rad(5.128)*sin(F);return{ra:atan2(Math.sin(l)*Math.cos(e)-Math.tan(b)*Math.sin(e),Math.cos(l)),dec:asin(Math.sin(b)*Math.cos(e)+Math.cos(b)*Math.sin(e)*Math.sin(l))}}
+function moonPos(date,lat,lon){const jd=jdFromDate(date),d=jd-2451545.0,mc=moonCoords(d),H=lst(jd,lon)-mc.ra;const alt=asin(Math.sin(lat)*Math.sin(mc.dec)+Math.cos(lat)*Math.cos(mc.dec)*Math.cos(H));return{alt}}
+function getMoonTimes(date0,latDeg,lonDeg){const lat=rad(latDeg),lon=rad(lonDeg);const start=toDateInTZ('UTC',date0);const r={rise:null,set:null};let pa=null,pt=null;for(let m=0;m<=1440;m+=10){const t=new Date(+start+m*60000);const a=moonPos(t,lat,lon).alt-rad(0.125);if(pa!==null){if(pa<=0&&a>0&&!r.rise)r.rise=new Date((+pt+ +t)/2);if(pa>=0&&a<0&&!r.set)r.set=new Date((+pt+ +t)/2);}pa=a;pt=t}return r}
+function findTransit(date0,latDeg,lonDeg){const lat=rad(latDeg),lon=rad(lonDeg);const start=toDateInTZ('UTC',date0);let ba=-1e9,bt=new Date(start);for(let m=0;m<=1440;m+=5){const t=new Date(+start+m*60000);const a=moonPos(t,lat,lon).alt;if(a>ba){ba=a;bt=t}}return bt}
+function solunarWindows(date0,lat,lon,tz){const times=getMoonTimes(date0,lat,lon);const transit=findTransit(date0,lat,lon);const underfoot=new Date(+transit+12*3600*1000);const major1=[new Date(+transit-3600*1000),new Date(+transit+3600*1000)],major2=[new Date(+underfoot-3600*1000),new Date(+underfoot+3600*1000)];const minor=[];if(times.rise)minor.push([new Date(+times.rise-30*60*1000),new Date(+times.rise+30*60*1000)]);if(times.set)minor.push([new Date(+times.set-30*60*1000),new Date(+times.set+30*60*1000)]);const fmt=r=>`${fmtHM(r[0],tz)}–${fmtHM(r[1],tz)}`;return{majors:`${fmt(major1)} · ${fmt(major2)}`,minors:minor.length?minor.map(fmt).join(' · '):'—'}}
 
 /* -------------------- Utilities -------------------- */
-function parseWindMph(str){
-  const nums = (str && str.match(/\d+/g)) ? str.match(/\d+/g).map(n=>parseInt(n,10)) : [];
-  if (nums.length === 0) return NaN;
-  return Math.max(...nums);
-}
+function parseWindMph(str){ const m=(str&&str.match(/\d+/g))?str.match(/\d+/g).map(n=>parseInt(n,10)):[]; return m.length?Math.max(...m):NaN; }
 
 /* -------------------- Main load -------------------- */
 async function loadAll(place){
-  const ctl = cancelInFlight();
-  setStatus('Loading…');
-  els.refresh.disabled = true;
+  const ctl=cancelInFlight(); setStatus('Loading…'); els.refresh.disabled=true;
+  try{
+    const points = await fetchJson(`https://api.weather.gov/points/${place.lat},${place.lon}`, 'application/geo+json', ctl);
+    const props=points.properties||{}; const rel=props.relativeLocation?.properties;
+    if(rel?.city&&rel?.state){ els.placeTitle.textContent=place.label&&place.label!=='Your Location'?place.label:`${rel.city}, ${rel.state}`; els.placeMeta.textContent=`${rel.city}, ${rel.state} • ${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`; }
+    else { els.placeTitle.textContent=place.label||'—'; els.placeMeta.textContent=`${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`; }
 
-  try {
-    // Points
-    const pointsUrl = `https://api.weather.gov/points/${place.lat},${place.lon}`;
-    const points = await fetchJson(pointsUrl, 'application/geo+json', ctl);
-    const props = points.properties || {};
-    const rel = props.relativeLocation?.properties;
-    if (rel?.city && rel?.state) {
-      els.placeTitle.textContent = place.label && place.label !== 'Your Location' ? place.label : `${rel.city}, ${rel.state}`;
-      els.placeMeta.textContent = `${rel.city}, ${rel.state} • ${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`;
-    } else {
-      els.placeTitle.textContent = place.label || '—';
-      els.placeMeta.textContent = `${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`;
-    }
+    const stations = await fetchJson(props.observationStations, 'application/geo+json', ctl);
+    const s0=stations.features?.[0]; const stationId=s0?.properties?.stationIdentifier || s0?.id?.split('/').pop();
+    els.station.textContent=s0?.properties?.name || stationId || '—';
 
-    // Observations
-    const stationsUrl = props.observationStations;
-    const stations = await fetchJson(stationsUrl, 'application/geo+json', ctl);
-    const s0 = stations.features?.[0];
-    const stationId = s0?.properties?.stationIdentifier || s0?.id?.split('/').pop();
-    els.station.textContent = s0?.properties?.name || stationId || '—';
-
-    const latestUrl = `https://api.weather.gov/stations/${stationId}/observations/latest?require_qc=true`;
-    els.obsApiLink.href = latestUrl;
-    const latest = await fetchJson(latestUrl, 'application/geo+json', ctl);
-    const lp = latest.properties || {};
-    let tempC = (lp.temperature && typeof lp.temperature.value === 'number') ? lp.temperature.value : null;
-    if (tempC == null) {
-      const recentUrl = `https://api.weather.gov/stations/${stationId}/observations?limit=5`;
-      const recent = await fetchJson(recentUrl, 'application/geo+json', ctl);
-      const withTemp = recent.features?.find(f => f?.properties?.temperature?.value != null);
-      if (withTemp) tempC = withTemp.properties.temperature.value;
-    }
-    if (tempC != null) { els.temp.textContent = `${Math.round((tempC*9/5)+32)}`; els.unit.textContent = '°F'; }
+    const latestUrl=`https://api.weather.gov/stations/${stationId}/observations/latest?require_qc=true`;
+    els.obsApiLink.href=latestUrl;
+    const latest=await fetchJson(latestUrl,'application/geo+json',ctl); const lp=latest.properties||{};
+    let tempC=(lp.temperature&&typeof lp.temperature.value==='number')?lp.temperature.value:null;
+    if(tempC==null){ const recent=await fetchJson(`https://api.weather.gov/stations/${stationId}/observations?limit=5`,'application/geo+json',ctl); const withTemp=recent.features?.find(f=>f?.properties?.temperature?.value!=null); if(withTemp) tempC=withTemp.properties.temperature.value; }
+    if(tempC!=null){ els.temp.textContent=`${Math.round((tempC*9/5)+32)}`; els.unit.textContent='°F'; }
     els.observed.textContent = lp.timestamp ? new Date(lp.timestamp).toLocaleString() : 'Observed —';
 
-    // Daily forecast (7 unique days) + wind
-    els.dailyApiLink.href = props.forecast || '#';
-    els.days.innerHTML = '';
-    if (props.forecast) {
-      const daily = await fetchJson(props.forecast, 'application/geo+json', ctl);
-      const periods = daily.properties?.periods || [];
-      const days = [], seen = new Set();
-      for (const p of periods) {
-        const k = new Date(p.startTime).toDateString();
-        if (!seen.has(k)) { days.push(p); seen.add(k); }
-        if (days.length >= 7) break;
-      }
-      days.forEach(p => els.days.appendChild(dayCard(p)));
+    els.dailyApiLink.href=props.forecast||'#'; els.days.innerHTML='';
+    if(props.forecast){ const daily=await fetchJson(props.forecast,'application/geo+json',ctl); const per=daily.properties?.periods||[]; const days=[],seen=new Set();
+      for(const p of per){ const k=new Date(p.startTime).toDateString(); if(!seen.has(k)){ days.push(p); seen.add(k);} if(days.length>=7)break; }
+      days.forEach(p=>els.days.appendChild(dayCard(p)));
     }
 
-    // Hourly next 24 → temp + wind line
-    els.hourlyApiLink.href = props.forecastHourly || '#';
-    if (props.forecastHourly) {
-      const hourly = await fetchJson(props.forecastHourly, 'application/geo+json', ctl);
-      const h = (hourly.properties?.periods || []).slice(0,24);
-      const pts = h.map(p => {
-        const tF = p.temperatureUnit === 'F' ? p.temperature : Math.round((p.temperature*9/5)+32);
-        const wMph = parseWindMph(p.windSpeed);
-        return {
-          time: new Date(p.startTime),
-          temp: tF,
-          wind: isNaN(wMph) ? 0 : wMph,
-          windDir: p.windDirection || ''
-        };
-      });
+    els.hourlyApiLink.href=props.forecastHourly||'#';
+    if(props.forecastHourly){ const hourly=await fetchJson(props.forecastHourly,'application/geo+json',ctl); const h=(hourly.properties?.periods||[]).slice(0,24);
+      const pts=h.map(p=>{ const tF=p.temperatureUnit==='F'?p.temperature:Math.round((p.temperature*9/5)+32); const w=parseWindMph(p.windSpeed);
+        return { time:new Date(p.startTime), temp:tF, wind:isNaN(w)?0:w, windDir:p.windDirection||'' }; });
       drawHourly(pts);
-    } else {
-      drawHourly([]);
-    }
+    } else { drawHourly([]); }
 
-    // Solunar
-    const todayLocal = toDateInTZ(place.tz, new Date());
-    const { majors, minors } = solunarWindows(todayLocal, place.lat, place.lon, place.tz);
-    els.majorTimes.textContent = majors;
-    els.minorTimes.textContent = minors;
+    const todayLocal=toDateInTZ(place.tz,new Date()); const {majors,minors}=solunarWindows(todayLocal,place.lat,place.lon,place.tz);
+    els.majorTimes.textContent=majors; els.minorTimes.textContent=minors;
 
-    setStatus('Live data loaded.', 'ok');
-  } catch (e) {
-    if (e.name === 'AbortError') return;
-    setStatus(`Unable to load: ${e.message}`, 'err');
-  } finally {
-    els.refresh.disabled = false;
-  }
+    setStatus('Live data loaded.','ok');
+  } catch(e){ if(e.name==='AbortError') return; setStatus(`Unable to load: ${e.message}`,'err'); }
+  finally{ els.refresh.disabled=false; }
 }
-
-els.refresh.addEventListener('click', () => currentPlace && loadAll(currentPlace), { passive:true });
+els.refresh.addEventListener('click', ()=> currentPlace && loadAll(currentPlace), {passive:true});
 
 /* -------------------- Deep-link -------------------- */
-window.addEventListener('DOMContentLoaded', () => {
-  if (location.hash.startsWith('#/')) {
-    const k = decodeURIComponent(location.hash.slice(2));
-    if (PLACES[k]) openPlace(k);
-  }
-});
+window.addEventListener('DOMContentLoaded', ()=>{ if(location.hash.startsWith('#/')){ const k=decodeURIComponent(location.hash.slice(2)); if(PLACES[k]) openPlace(k); }});
 </script>
 </body>
 </html>
