@@ -2,50 +2,46 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Weather + Solunar • Queen Creek • Sunnyvale • Heber</title>
+  <title>Weather + Solunar • Queen Creek • Sunnyvale • Heber • ZIP Jump</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
   <style>
     :root { color-scheme: dark; --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3; }
-    html,body { height:100%; margin:0; background:var(--bg); color:#e6eef7;
-      font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji",sans-serif;
-      -webkit-text-size-adjust:100%;
-    }
-    a { color:var(--accent); text-decoration:none; border-bottom:1px dashed rgba(110,231,255,.35) }
-    .wrap { max-width:1100px; margin:0 auto; padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); }
-    .card { background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));
-      border:1px solid rgba(255,255,255,.08); border-radius:20px; box-shadow:0 8px 30px rgba(0,0,0,.35); padding:16px; margin-bottom:16px; }
-    .muted { color:var(--muted) }
-    .title { display:flex; justify-content:space-between; align-items:center; gap:8px }
-    .title h1 { margin:0; font-size:22px }
-    .btn { background:linear-gradient(180deg,#1a2a45,#13243d); color:#e6f2ff; border:1px solid rgba(255,255,255,.12);
-      border-radius:14px; padding:12px 16px; cursor:pointer; font-weight:700; font-size:16px; -webkit-tap-highlight-color:transparent; }
-    .btn:active { transform:translateY(1px) }
-    .btn:disabled { opacity:.6; cursor:not-allowed }
-    .grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
-    .grid-2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-    .grid-7 { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; margin-top:10px }
-    .pill, .day { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.10); border-radius:12px; padding:10px 12px; }
-    .row { display:flex; align-items:center; gap:12px; flex-wrap:wrap }
-    .temp { font-size:48px; font-weight:750; letter-spacing:.5px }
-    .unit { font-size:18px; color:var(--muted) }
-    .status { margin-top:8px; font-size:14px } .ok { color:var(--ok) } .err { color:var(--err) }
-    .day h3 { margin:0 0 4px; font-size:14px } .day .t { font-size:20px; font-weight:700 }
-    .chart-wrap { position:relative; width:100%; height:320px; touch-action:manipulation; }
-    canvas { width:100%; height:100%; display:block; border-radius:12px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08) }
-    .tooltip { position:absolute; pointer-events:none; background:#0b1220; color:#e6eef7; border:1px solid rgba(255,255,255,.15);
-      border-radius:10px; padding:6px 8px; font-size:12px; transform:translate(-50%,-110%); white-space:nowrap; box-shadow:0 8px 20px rgba(0,0,0,.35); display:none; }
-    .choices { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px }
-    .choice { background:rgba(255,255,255,.06); border:1px dashed rgba(255,255,255,.18); border-radius:16px; padding:16px; cursor:pointer; text-align:center; font-weight:700 }
-    .choice:hover { border-style:solid }
-    @media (max-width:900px){ .grid-3{grid-template-columns:1fr} .grid-7{grid-template-columns:repeat(3,minmax(0,1fr))} .choices{grid-template-columns:1fr} .chart-wrap{height:260px} .temp{font-size:40px} }
+    html,body{height:100%;margin:0;background:var(--bg);color:#e6eef7;font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji",sans-serif;-webkit-text-size-adjust:100%}
+    .wrap{max-width:1100px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+    a{color:var(--accent);text-decoration:none;border-bottom:1px dashed rgba(110,231,255,.35)}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));border:1px solid rgba(255,255,255,.08);border-radius:20px;box-shadow:0 8px 30px rgba(0,0,0,.35);padding:16px;margin-bottom:16px}
+    .title{display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .title h1{margin:0;font-size:22px}
+    .btn{background:linear-gradient(180deg,#1a2a45,#13243d);color:#e6f2ff;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px 16px;cursor:pointer;font-weight:700;font-size:16px;-webkit-tap-highlight-color:transparent}
+    .btn:active{transform:translateY(1px)} .btn:disabled{opacity:.6;cursor:not-allowed}
+    .choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    .choice{background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.18);border-radius:16px;padding:16px;cursor:pointer;text-align:center;font-weight:700}
+    .choice:hover{border-style:solid}
+    .zipgrid{display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:12px}
+    .input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:12px 14px;color:#e6eef7;font-size:16px}
+    .muted{color:var(--muted)}
+    .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:10px}
+    .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .grid-7{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:10px}
+    .pill,.day{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:10px 12px;min-height:60px}
+    .temp{font-size:48px;font-weight:750;letter-spacing:.5px}
+    .unit{font-size:18px;color:var(--muted)}
+    .status{margin-top:8px;font-size:14px}
+    .ok{color:var(--ok)} .err{color:var(--err)}
+    .day h3{margin:0 0 4px;font-size:14px} .day .t{font-size:20px;font-weight:700}
+    .chart-wrap{position:relative;width:100%;height:320px;touch-action:manipulation}
+    canvas{width:100%;height:100%;display:block;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
+    .tooltip{position:absolute;pointer-events:none;background:#0b1220;color:#e6eef7;border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:6px 8px;font-size:12px;transform:translate(-50%,-110%);white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,.35);display:none}
+    @media (max-width:900px){.choices{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}.grid-7{grid-template-columns:repeat(3,minmax(0,1fr))}.chart-wrap{height:260px}.temp{font-size:40px}}
   </style>
 </head>
 <body>
 <div class="wrap">
-  <!-- ROUTER: HOME -->
+  <!-- HOME -->
   <div id="view-home" class="card">
     <div class="title">
       <h1>Pick a place</h1>
@@ -55,12 +51,22 @@
       <div class="choice" data-place="sunnyvale">Sunnyvale, CA</div>
       <div class="choice" data-place="heber">Heber, AZ</div>
     </div>
+
+    <div class="card" style="margin-top:12px">
+      <h2 style="margin:0 0 8px">Or jump to any U.S. ZIP</h2>
+      <form id="zipForm" class="zipgrid">
+        <input id="zipInput" class="input" inputmode="numeric" pattern="[0-9]*" minlength="5" maxlength="5" placeholder="Enter 5-digit ZIP (e.g., 85142)" />
+        <button class="btn" type="submit">Go</button>
+      </form>
+      <div id="zipMsg" class="muted" style="margin-top:8px;font-size:13px">Uses Zippopotam.us to geolocate your ZIP, then NWS for weather.</div>
+    </div>
+
     <div class="muted" style="margin-top:10px">
-      Weather data from the National Weather Service (api.weather.gov). Solunar (major/minor lunar bite windows) from api.solunar.org.
+      Weather: National Weather Service (api.weather.gov). Solunar: computed locally (major/minor windows).
     </div>
   </div>
 
-  <!-- ROUTER: DETAIL -->
+  <!-- DETAIL -->
   <div id="view-detail" class="card" style="display:none">
     <div class="title">
       <h1 id="placeTitle">—</h1>
@@ -84,8 +90,7 @@
         <div class="muted" style="font-size:13px">
           <a id="obsApiLink" href="#" target="_blank" rel="noopener">obs</a> ·
           <a id="dailyApiLink" href="#" target="_blank" rel="noopener">daily</a> ·
-          <a id="hourlyApiLink" href="#" target="_blank" rel="noopener">hourly</a> ·
-          <a id="solunarApiLink" href="#" target="_blank" rel="noopener">solunar</a>
+          <a id="hourlyApiLink" href="#" target="_blank" rel="noopener">hourly</a>
         </div>
       </div>
     </div>
@@ -118,38 +123,28 @@
           <div id="minorTimes" class="muted">—</div>
         </div>
       </div>
-      <div class="muted" style="margin-top:8px;font-size:13px">Times are local to the selected place’s time zone for today.</div>
+      <div class="muted" style="margin-top:8px;font-size:13px">Local times for the selected place’s time zone.</div>
     </div>
 
-    <div class="status" id="status">Contacting weather.gov…</div>
-  </div>
-
-  <div class="muted" style="margin-top:8px;font-size:13px">
-    NWS API docs; “points → gridpoints/forecast + /forecast/hourly” and stations/observations. Solunar API for major/minor windows. Links below.
+    <div class="status" id="status">—</div>
   </div>
 </div>
 
 <script>
-/* ---------- Places ---------- */
+/* -------------------- GLOBALS (declare FIRST to avoid TDZ errors) -------------------- */
+let hourlyPlotState = null;           // chart state
+let currentPlaceKey = null;           // routing
+let currentPlace = null;
+let runningController = null;         // AbortController for fetches
+
+/* -------------------- Static places -------------------- */
 const PLACES = {
-  queencreek: {
-    label: "Queen Creek, AZ · 85142",
-    lat: 33.2425, lon: -111.6343,
-    tz: "America/Phoenix"
-  },
-  sunnyvale: {
-    label: "Sunnyvale, CA",
-    lat: 37.3688, lon: -122.0363,
-    tz: "America/Los_Angeles"
-  },
-  heber: {
-    label: "Heber, AZ",
-    lat: 34.4206, lon: -110.5696,
-    tz: "America/Phoenix"
-  }
+  queencreek: { label: "Queen Creek, AZ · 85142", lat: 33.2425, lon: -111.6343, tz: "America/Phoenix" },
+  sunnyvale:  { label: "Sunnyvale, CA",            lat: 37.3688, lon: -122.0363, tz: "America/Los_Angeles" },
+  heber:      { label: "Heber, AZ",                lat: 34.4206, lon: -110.5696, tz: "America/Phoenix" }
 };
 
-/* ---------- Router ---------- */
+/* -------------------- Elements -------------------- */
 const els = {
   home: document.getElementById('view-home'),
   detail: document.getElementById('view-detail'),
@@ -169,44 +164,123 @@ const els = {
   obsApiLink: document.getElementById('obsApiLink'),
   dailyApiLink: document.getElementById('dailyApiLink'),
   hourlyApiLink: document.getElementById('hourlyApiLink'),
-  solunarApiLink: document.getElementById('solunarApiLink'),
+  majorTimes: document.getElementById('majorTimes'),
+  minorTimes: document.getElementById('minorTimes'),
+  zipForm: document.getElementById('zipForm'),
+  zipInput: document.getElementById('zipInput'),
+  zipMsg: document.getElementById('zipMsg')
 };
 
-let currentPlaceKey = null;
-[...document.querySelectorAll('.choice')].forEach(el => {
+/* -------------------- Routing / interactions -------------------- */
+document.querySelectorAll('.choice').forEach(el => {
   el.addEventListener('click', () => openPlace(el.dataset.place), { passive: true });
 });
+
 els.back.addEventListener('click', () => {
+  cancelInFlight();
   els.detail.style.display = 'none';
   els.home.style.display = '';
   history.replaceState({}, '', '#/');
 }, { passive: true });
 
-function openPlace(key) {
+els.zipForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const zip = (els.zipInput.value || '').trim();
+  if (!/^\d{5}$/.test(zip)) { els.zipMsg.textContent = 'Enter a 5-digit U.S. ZIP.'; return; }
+  try {
+    els.zipMsg.textContent = 'Looking up ZIP…';
+    const info = await lookupZip(zip);
+    const label = `${info.placeName}, ${info.stateAbbr} · ${zip}`;
+    openDynamicPlace({ key: `zip:${zip}`, label, lat: info.lat, lon: info.lon, tz: guessTZ(info.stateAbbr, info.lat, info.lon) });
+  } catch (err) {
+    els.zipMsg.textContent = `ZIP lookup failed: ${err.message}`;
+  }
+});
+
+/* -------------------- ZIP geocoder (Zippopotam.us) -------------------- */
+async function lookupZip(zip) {
+  const url = `https://api.zippopotam.us/us/${zip}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`No data for ${zip}`);
+  const j = await res.json();
+  const p = j.places && j.places[0];
+  if (!p) throw new Error('Malformed ZIP data');
+  return {
+    lat: parseFloat(p.latitude),
+    lon: parseFloat(p.longitude),
+    placeName: p['place name'],
+    stateAbbr: p['state abbreviation']
+  };
+}
+function guessTZ(stateAbbr, lat, lon) {
+  const pacific = ['CA','WA','OR','NV'];
+  const mountain = ['AZ','UT','CO','NM','MT','WY','ID'];
+  if (stateAbbr === 'AZ') return 'America/Phoenix';
+  if (pacific.includes(stateAbbr)) return 'America/Los_Angeles';
+  if (mountain.includes(stateAbbr)) return 'America/Denver';
+  if (lon <= -112) return 'America/Los_Angeles';
+  if (lon <= -97)  return 'America/Denver';
+  if (lon <= -85)  return 'America/Chicago';
+  return 'America/New_York';
+}
+
+/* -------------------- View handling -------------------- */
+function openPlace(key) { openDetail(key, PLACES[key]); }
+function openDynamicPlace(p) { openDetail(p.key, p); }
+
+function openDetail(key, place) {
+  cancelInFlight();                    // stop any prior loads
   currentPlaceKey = key;
-  const p = PLACES[key];
-  els.placeTitle.textContent = p.label;
-  els.placeMeta.textContent = `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)} • ${p.tz}`;
+  currentPlace = place;
+  resetDetail(place);                  // show dashes immediately
   els.home.style.display = 'none';
   els.detail.style.display = '';
-  history.replaceState({}, '', `#/${key}`);
-  loadAll(p).catch(err => setStatus(`Load failed: ${err.message}`, 'err'));
+  history.replaceState({}, '', `#/${encodeURIComponent(key)}`);
+  loadAll(place).catch(err => setStatus(`Load failed: ${err.message}`, 'err'));
 }
+
 if (location.hash.startsWith('#/')) {
-  const k = location.hash.slice(2);
+  const k = decodeURIComponent(location.hash.slice(2));
   if (PLACES[k]) openPlace(k);
 }
 
-/* ---------- Helpers ---------- */
+/* -------------------- Reset detail (dashes) -------------------- */
+function resetDetail(place) {
+  els.placeTitle.textContent = place.label || '—';
+  els.placeMeta.textContent  = `${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz || '—'}`;
+  els.temp.textContent = '—';
+  els.unit.textContent = '°F';
+  els.observed.textContent = 'Observed —';
+  els.station.textContent = '—';
+  els.days.innerHTML = '';
+  drawHourly([]);                      // clears chart area
+  els.majorTimes.textContent = '—';
+  els.minorTimes.textContent = '—';
+  els.obsApiLink.href = '#';
+  els.dailyApiLink.href = '#';
+  els.hourlyApiLink.href = '#';
+  setStatus('Loading…');
+}
+
+/* -------------------- Status -------------------- */
 function setStatus(text, cls) {
   els.status.textContent = text;
   els.status.className = 'status ' + (cls || '');
 }
-async function fetchJson(url, accept='application/geo+json') {
-  const res = await fetch(url, { headers: { 'Accept': accept }});
+
+/* -------------------- Fetch helper with cancel -------------------- */
+async function fetchJson(url, accept='application/geo+json', controller) {
+  const res = await fetch(url, { headers: { 'Accept': accept }, signal: controller?.signal });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return res.json();
 }
+function cancelInFlight() {
+  if (runningController) try { runningController.abort(); } catch {}
+  runningController = new AbortController();
+  return runningController;
+}
+
+/* -------------------- Day card -------------------- */
 function dayCard(period) {
   const div = document.createElement('div');
   div.className = 'day';
@@ -217,8 +291,7 @@ function dayCard(period) {
   return div;
 }
 
-/* ---------- Hourly chart (vanilla canvas) ---------- */
-let hourlyPlotState = null;
+/* -------------------- Canvas chart -------------------- */
 function setupCanvas() {
   const dpr = window.devicePixelRatio || 1;
   const cssW = els.canvas.clientWidth || 1100;
@@ -229,14 +302,20 @@ function setupCanvas() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { ctx, W: cssW, H: cssH };
 }
-function niceStep(raw){ const steps=[1,2,5,10]; const pow=10**Math.floor(Math.log10(raw)); for(const s of steps){const v=s*pow; if(raw<=v) return v;} return 10*pow; }
+function niceStep(raw){ const steps=[1,2,5,10]; const pow=10**Math.floor(Math.log10(raw||1)); for(const s of steps){const v=s*pow; if(raw<=v) return v;} return 10*pow; }
 const hourLabel = d => d.toLocaleTimeString([], { hour: 'numeric' });
 
 function drawHourly(points){
   const { ctx, W, H } = setupCanvas();
+  ctx.clearRect(0,0,W,H);
+  if (!points || points.length === 0) {
+    ctx.strokeStyle = 'rgba(230,238,247,0.12)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(46, H-34); ctx.lineTo(W-10, H-34); ctx.stroke();
+    hourlyPlotState = { x:()=>0, y:()=>0, points:[] };
+    return;
+  }
   const pad = { l:46, r:10, t:14, b:34 };
   const chartW = W - pad.l - pad.r, chartH = H - pad.t - pad.b;
-
   const vals = points.map(p=>p.temp).filter(Number.isFinite);
   const tMin = Math.min(...vals), tMax = Math.max(...vals);
   const range = Math.max(4, tMax - tMin);
@@ -258,11 +337,11 @@ function drawHourly(points){
 
   // x labels each 3 hours
   ctx.textAlign='center'; ctx.textBaseline='top';
-  for (let i=0;i<points.length;i+=3){ ctx.fillText(hourLabel(points[i].time), x(i), H - pad.b + 8); }
+  for (let i=0;i<points.length;i+=3){ ctx.fillText(hourLabel(points[i].time), x(i), H - 34 + 8); }
 
   // line
   ctx.beginPath();
-  for (let i=0;i<points.length;i++){ const xx=x(i), yy=y(points[i].temp); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
+  for (let i=0; i<points.length; i++){ const xx=x(i), yy=y(points[i].temp); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
   ctx.strokeStyle = '#6ee7ff'; ctx.lineWidth = 2.25; ctx.stroke();
 
   // points
@@ -271,6 +350,7 @@ function drawHourly(points){
 
   hourlyPlotState = { x, y, points };
 }
+
 function nearestPoint(px,py){
   if(!hourlyPlotState) return null;
   const { x,y,points } = hourlyPlotState;
@@ -298,110 +378,191 @@ function nearestPoint(px,py){
   window.addEventListener('resize', ()=>{ if(hourlyPlotState) drawHourly(hourlyPlotState.points); }, {passive:true});
 })();
 
-/* ---------- Time zone helpers for Solunar ---------- */
-function tzOffsetHours(timeZone, date=new Date()){
-  // minutes difference: zoneTime -> UTC
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone, year:'numeric', month:'2-digit', day:'2-digit',
-    hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
-  });
-  const parts = dtf.formatToParts(date).reduce((acc,p)=>{acc[p.type]=p.value; return acc;}, {});
-  const asUTC = Date.UTC(+parts.year, +parts.month-1, +parts.day, +parts.hour, +parts.minute, +parts.second);
-  const minutes = (asUTC - date.getTime())/60000; // positive if zone ahead of UTC
-  return Math.round(minutes/60);
+/* -------------------- Local solunar calculation --------------------
+   Approach:
+   - Compute moonrise / moonset for the selected location and date.
+   - Sample moon altitude each 5 min to find transit (highest altitude) ≈ overhead.
+   - Underfoot ≈ transit ± 12h.
+   - Major periods: 2 hours centered on transit and underfoot.
+   - Minor periods: 1 hour centered on rise and set (if they occur today).
+   This avoids external CORS issues.
+-------------------------------------------------------------------- */
+function toDateInTZ(tz, d=new Date()){
+  // Keep calendar date in tz
+  const parts = new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d)
+    .reduce((a,c)=>{a[c.type]=c.value;return a;},{});
+  return new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00`);
 }
-function yyyymmddInZone(timeZone, date=new Date()){
-  const p = new Intl.DateTimeFormat('en-CA', { timeZone, year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(date)
-      .reduce((a,c)=>{a[c.type]=c.value; return a;}, {});
-  return `${p.year}${p.month}${p.day}`; // yyyymmdd
+function pad2(n){ return n<10 ? '0'+n : ''+n; }
+function fmtHM(d, tz){
+  const f = new Intl.DateTimeFormat([], { timeZone: tz, hour:'2-digit', minute:'2-digit' });
+  return f.format(d);
+}
+// Minimal Sun/Moon math based on public-domain formulas (adapted, compact).
+const PI = Math.PI, sin = Math.sin, cos = Math.cos, tan = Math.tan, asin = Math.asin, atan2 = Math.atan2;
+function rad(x){ return x*PI/180; } function deg(x){ return x*180/PI; }
+function jdFromDate(date){ return date/86400000 + 2440587.5; }
+function dateFromJD(jd){ return new Date((jd - 2440587.5)*86400000); }
+function lst(jd, lon){ // local sidereal time (radians)
+  const d = jd - 2451545.0;
+  const LST = rad((280.46061837 + 360.98564736629*d) % 360) + lon;
+  return LST;
+}
+function moonCoords(d) { // from approximate algorithms
+  const L = rad((218.316 + 13.176396*d) % 360);
+  const M = rad((134.963 + 13.064993*d) % 360);
+  const F = rad((93.272 + 13.229350*d) % 360);
+  const l = L + rad(6.289)*sin(M);
+  const b = rad(5.128)*sin(F);
+  const dt = 385001 - 20905*cos(M);
+  return { ra: atan2(sin(l)*cos(rad(23.4397)) - tan(b)*sin(rad(23.4397)), cos(l)), dec: asin(sin(b)*cos(rad(23.4397)) + cos(b)*sin(rad(23.4397))*sin(l)), dist: dt };
+}
+function moonPos(date, lat, lon){ // returns altitude (radians)
+  const jd = jdFromDate(date);
+  const d = jd - 2451545.0;
+  const mc = moonCoords(d);
+  const H = lst(jd, lon) - mc.ra;
+  const alt = asin( sin(lat)*sin(mc.dec) + cos(lat)*cos(mc.dec)*cos(H) );
+  return { alt, dec: mc.dec, H };
+}
+function getMoonTimes(date0, latDeg, lonDeg){ // rough moonrise/set for the date (local)
+  const lat = rad(latDeg), lon = rad(lonDeg);
+  // step through the day in 10-minute increments to find sign changes of altitude
+  const start = toDateInTZ('UTC', date0); // iterate in UTC to avoid DST jumps; alt uses UTC okay
+  const result = { rise: null, set: null };
+  let prevAlt = null, prevT = null;
+  for (let m=0; m<=24*60; m+=10){
+    const t = new Date(start.getTime() + m*60000);
+    const a = moonPos(t, lat, lon).alt - rad(0.125); // refraction
+    if (prevAlt !== null){
+      if (prevAlt <= 0 && a > 0 && !result.rise) result.rise = new Date((+prevT + +t)/2);
+      if (prevAlt >= 0 && a < 0 && !result.set)  result.set  = new Date((+prevT + +t)/2);
+    }
+    prevAlt = a; prevT = t;
+  }
+  return result;
+}
+function findTransit(date0, latDeg, lonDeg){
+  const lat = rad(latDeg), lon = rad(lonDeg);
+  const start = toDateInTZ('UTC', date0);
+  let bestAlt = -1e9, bestT = new Date(start);
+  for (let m=0; m<=24*60; m+=5){
+    const t = new Date(start.getTime() + m*60000);
+    const a = moonPos(t, lat, lon).alt;
+    if (a > bestAlt){ bestAlt = a; bestT = t; }
+  }
+  return bestT;
+}
+function solunarWindows(date0, lat, lon, tz){
+  const times = getMoonTimes(date0, lat, lon);
+  const transit = findTransit(date0, lat, lon);
+  const underfoot = new Date(+transit + 12*3600*1000);
+
+  const major1 = [new Date(+transit - 60*60*1000), new Date(+transit + 60*60*1000)];
+  const major2 = [new Date(+underfoot - 60*60*1000), new Date(+underfoot + 60*60*1000)];
+
+  const minor = [];
+  if (times.rise) minor.push([new Date(+times.rise - 30*60*1000), new Date(+times.rise + 30*60*1000)]);
+  if (times.set)  minor.push([new Date(+times.set  - 30*60*1000), new Date(+times.set  + 30*60*1000)]);
+
+  const fmt = r => `${fmtHM(r[0], tz)}–${fmtHM(r[1], tz)}`;
+  const majors = `${fmt(major1)} · ${fmt(major2)}`;
+  const minors = minor.length ? minor.map(fmt).join(' · ') : '—';
+  return { majors, minors };
 }
 
-/* ---------- Load + Render ---------- */
+/* -------------------- Main load (with cancellation & placeholders) -------------------- */
 async function loadAll(place){
-  setStatus('Contacting weather.gov…');
+  const ctl = cancelInFlight();     // new controller; also resets previous fetches
+  setStatus('Loading…');
   els.refresh.disabled = true;
 
   try {
-    // 1) NWS points (gives forecast + hourly URLs and station list)
+    // NWS points
     const pointsUrl = `https://api.weather.gov/points/${place.lat},${place.lon}`;
-    const points = await fetchJson(pointsUrl);
+    const points = await fetchJson(pointsUrl, 'application/geo+json', ctl);
     const props = points.properties || {};
     const rel = props.relativeLocation?.properties;
-    if (rel?.city && rel?.state) els.placeMeta.textContent = `${rel.city}, ${rel.state} • ${place.lat.toFixed(4)}, ${place.lon.toFixed(4)} • ${place.tz}`;
+    els.placeMeta.textContent = rel?.city && rel?.state
+      ? `${rel.city}, ${rel.state} • ${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`
+      : `${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`;
 
-    // 2) Observations (nearest station)
+    // Observations (nearest station)
     const stationsUrl = props.observationStations;
-    const stations = await fetchJson(stationsUrl);
+    const stations = await fetchJson(stationsUrl, 'application/geo+json', ctl);
     const s0 = stations.features?.[0];
     const stationId = s0?.properties?.stationIdentifier || s0?.id?.split('/').pop();
     els.station.textContent = s0?.properties?.name || stationId || '—';
 
     const latestUrl = `https://api.weather.gov/stations/${stationId}/observations/latest?require_qc=true`;
     els.obsApiLink.href = latestUrl;
-    const latest = await fetchJson(latestUrl);
+    const latest = await fetchJson(latestUrl, 'application/geo+json', ctl);
     const lp = latest.properties || {};
     let tempC = (lp.temperature && typeof lp.temperature.value === 'number') ? lp.temperature.value : null;
     if (tempC == null) {
       const recentUrl = `https://api.weather.gov/stations/${stationId}/observations?limit=5`;
-      const recent = await fetchJson(recentUrl);
+      const recent = await fetchJson(recentUrl, 'application/geo+json', ctl);
       const withTemp = recent.features?.find(f => f?.properties?.temperature?.value != null);
       if (withTemp) tempC = withTemp.properties.temperature.value;
     }
     if (tempC != null) { els.temp.textContent = `${Math.round((tempC*9/5)+32)}`; els.unit.textContent = '°F'; }
     els.observed.textContent = lp.timestamp ? new Date(lp.timestamp).toLocaleString() : 'Observed —';
 
-    // 3) 7-day forecast
-    els.dailyApiLink.href = props.forecast;
-    const daily = await fetchJson(props.forecast);
-    const periods = daily.properties?.periods || [];
-    const days = [], seen = new Set();
-    for (const p of periods) {
-      const k = new Date(p.startTime).toDateString();
-      if (!seen.has(k)) { days.push(p); seen.add(k); }
-      if (days.length >= 7) break;
+    // Daily forecast (7 unique days)
+    els.dailyApiLink.href = props.forecast || '#';
+    if (props.forecast) {
+      const daily = await fetchJson(props.forecast, 'application/geo+json', ctl);
+      const periods = daily.properties?.periods || [];
+      const days = [], seen = new Set();
+      for (const p of periods) {
+        const k = new Date(p.startTime).toDateString();
+        if (!seen.has(k)) { days.push(p); seen.add(k); }
+        if (days.length >= 7) break;
+      }
+      els.days.innerHTML = ''; days.forEach(p => els.days.appendChild(dayCard(p)));
+    } else {
+      els.days.innerHTML = '';
     }
-    els.days.innerHTML = ''; days.forEach(p => els.days.appendChild(dayCard(p)));
 
-    // 4) Hourly (next 24) → chart
-    els.hourlyApiLink.href = props.forecastHourly;
-    const hourly = await fetchJson(props.forecastHourly);
-    const h = (hourly.properties?.periods || []).slice(0,24);
-    const pts = h.map(p => ({
-      time: new Date(p.startTime),
-      temp: p.temperatureUnit === 'F' ? p.temperature : Math.round((p.temperature*9/5)+32),
-      short: p.shortForecast || ''
-    }));
-    drawHourly(pts);
-
-    // 5) Solunar (major/minor) for today at place’s time zone
-    const dateStr = yyyymmddInZone(place.tz, new Date());
-    const tzH = tzOffsetHours(place.tz, new Date());
-    const solunarUrl = `https://api.solunar.org/solunar/${place.lat},${place.lon},${dateStr},${tzH}`;
-    els.solunarApiLink.href = solunarUrl;
-    let majors='—', minors='—';
-    try {
-      const s = await fetchJson(solunarUrl, 'application/json');
-      // API fields commonly: major1Start, major1End, major2Start, major2End, minor1Start, minor1End, minor2Start, minor2End
-      const m1s = s.major1Start, m1e = s.major1End, m2s = s.major2Start, m2e = s.major2End;
-      const n1s = s.minor1Start, n1e = s.minor1End, n2s = s.minor2Start, n2e = s.minor2End;
-      majors = (m1s&&m1e ? `${m1s}–${m1e}`:'—') + ' · ' + (m2s&&m2e ? `${m2s}–${m2e}`:'—');
-      minors = (n1s&&n1e ? `${n1s}–${n1e}`:'—') + ' · ' + (n2s&&n2e ? `${n2s}–${n2e}`:'—');
-    } catch(e) {
-      majors = 'Unavailable'; minors = 'Unavailable';
+    // Hourly (next 24) → graph
+    els.hourlyApiLink.href = props.forecastHourly || '#';
+    if (props.forecastHourly) {
+      const hourly = await fetchJson(props.forecastHourly, 'application/geo+json', ctl);
+      const h = (hourly.properties?.periods || []).slice(0,24);
+      const pts = h.map(p => ({
+        time: new Date(p.startTime),
+        temp: p.temperatureUnit === 'F' ? p.temperature : Math.round((p.temperature*9/5)+32),
+        short: p.shortForecast || ''
+      }));
+      drawHourly(pts);
+    } else {
+      drawHourly([]);
     }
-    document.getElementById('majorTimes').textContent = majors;
-    document.getElementById('minorTimes').textContent = minors;
+
+    // Solunar (computed locally)
+    const todayLocal = toDateInTZ(place.tz, new Date());
+    const { majors, minors } = solunarWindows(todayLocal, place.lat, place.lon, place.tz);
+    els.majorTimes.textContent = majors;
+    els.minorTimes.textContent = minors;
 
     setStatus('Live data loaded.', 'ok');
   } catch (e) {
-    console.error(e);
+    if (e.name === 'AbortError') return; // ignore cancels on fast switches
     setStatus(`Unable to load: ${e.message}`, 'err');
   } finally {
     els.refresh.disabled = false;
   }
 }
-els.refresh.addEventListener('click', () => currentPlaceKey && loadAll(PLACES[currentPlaceKey]), { passive:true });
 
+els.refresh.addEventListener('click', () => currentPlace && loadAll(currentPlace), { passive:true });
+
+/* -------------------- Deep-link reload if needed -------------------- */
+window.addEventListener('DOMContentLoaded', () => {
+  if (location.hash.startsWith('#/')) {
+    const k = decodeURIComponent(location.hash.slice(2));
+    if (PLACES[k]) openPlace(k);
+  }
+});
 </script>
 </body>
 </html>
