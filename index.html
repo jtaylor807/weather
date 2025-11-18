@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Weather + Solunar • Queen Creek • Sunnyvale • Heber • ZIP Jump</title>
+  <title>Weather + Solunar • Queen Creek • Sunnyvale • Heber • ZIP/Geo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
   <style>
-    :root { color-scheme: dark; --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3; }
+    :root { color-scheme: dark; --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3; --wind:#ffd27a; }
     html,body{height:100%;margin:0;background:var(--bg);color:#e6eef7;font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji",sans-serif;-webkit-text-size-adjust:100%}
     .wrap{max-width:1100px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
     a{color:var(--accent);text-decoration:none;border-bottom:1px dashed rgba(110,231,255,.35)}
@@ -20,7 +20,7 @@
     .choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
     .choice{background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.18);border-radius:16px;padding:16px;cursor:pointer;text-align:center;font-weight:700}
     .choice:hover{border-style:solid}
-    .zipgrid{display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:12px}
+    .zipgrid{display:grid;grid-template-columns:1fr auto auto;gap:10px;margin-top:12px}
     .input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:12px 14px;color:#e6eef7;font-size:16px}
     .muted{color:var(--muted)}
     .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -33,10 +33,15 @@
     .status{margin-top:8px;font-size:14px}
     .ok{color:var(--ok)} .err{color:var(--err)}
     .day h3{margin:0 0 4px;font-size:14px} .day .t{font-size:20px;font-weight:700}
-    .chart-wrap{position:relative;width:100%;height:320px;touch-action:manipulation}
+    .day .w{font-size:12px;color:var(--muted);margin-top:4px}
+    .chart-wrap{position:relative;width:100%;height:340px;touch-action:manipulation}
     canvas{width:100%;height:100%;display:block;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
     .tooltip{position:absolute;pointer-events:none;background:#0b1220;color:#e6eef7;border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:6px 8px;font-size:12px;transform:translate(-50%,-110%);white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,.35);display:none}
-    @media (max-width:900px){.choices{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}.grid-7{grid-template-columns:repeat(3,minmax(0,1fr))}.chart-wrap{height:260px}.temp{font-size:40px}}
+    .legend{display:flex;gap:16px;align-items:center;margin:6px 0 0 4px;font-size:12px;color:var(--muted)}
+    .key{display:inline-flex;align-items:center;gap:6px}
+    .kbox{width:14px;height:3px;border-radius:2px;display:inline-block;background:var(--accent)}
+    .kbox.wind{background:var(--wind)}
+    @media (max-width:900px){.choices{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}.grid-7{grid-template-columns:repeat(3,minmax(0,1fr))}.chart-wrap{height:280px}.temp{font-size:40px}}
   </style>
 </head>
 <body>
@@ -57,8 +62,9 @@
       <form id="zipForm" class="zipgrid">
         <input id="zipInput" class="input" inputmode="numeric" pattern="[0-9]*" minlength="5" maxlength="5" placeholder="Enter 5-digit ZIP (e.g., 85142)" />
         <button class="btn" type="submit">Go</button>
+        <button class="btn" type="button" id="geoBtn" title="Use your phone location">Your location</button>
       </form>
-      <div id="zipMsg" class="muted" style="margin-top:8px;font-size:13px">Uses Zippopotam.us to geolocate your ZIP, then NWS for weather.</div>
+      <div id="zipMsg" class="muted" style="margin-top:8px;font-size:13px">ZIP uses Zippopotam.us; “Your location” uses your device GPS (Safari will ask permission).</div>
     </div>
 
     <div class="muted" style="margin-top:10px">
@@ -103,9 +109,13 @@
 
     <!-- HOURLY GRAPH -->
     <div class="card">
-      <h2 style="margin:0 0 8px">Next 24 Hours (Hourly Temperature)</h2>
+      <h2 style="margin:0 0 8px">Next 24 Hours (Temp & Wind)</h2>
+      <div class="legend">
+        <span class="key"><span class="kbox"></span> Temp (°F)</span>
+        <span class="key"><span class="kbox wind"></span> Wind (mph)</span>
+      </div>
       <div class="chart-wrap" id="chartWrap">
-        <canvas id="hourlyChart" width="1100" height="320"></canvas>
+        <canvas id="hourlyChart" width="1100" height="340"></canvas>
         <div class="tooltip" id="tooltip"></div>
       </div>
     </div>
@@ -131,11 +141,11 @@
 </div>
 
 <script>
-/* -------------------- GLOBALS (declare FIRST to avoid TDZ errors) -------------------- */
-let hourlyPlotState = null;           // chart state
-let currentPlaceKey = null;           // routing
+/* -------------------- GLOBALS -------------------- */
+let hourlyPlotState = null;
+let currentPlaceKey = null;
 let currentPlace = null;
-let runningController = null;         // AbortController for fetches
+let runningController = null;
 
 /* -------------------- Static places -------------------- */
 const PLACES = {
@@ -168,10 +178,11 @@ const els = {
   minorTimes: document.getElementById('minorTimes'),
   zipForm: document.getElementById('zipForm'),
   zipInput: document.getElementById('zipInput'),
+  geoBtn: document.getElementById('geoBtn'),
   zipMsg: document.getElementById('zipMsg')
 };
 
-/* -------------------- Routing / interactions -------------------- */
+/* -------------------- Interactions -------------------- */
 document.querySelectorAll('.choice').forEach(el => {
   el.addEventListener('click', () => openPlace(el.dataset.place), { passive: true });
 });
@@ -197,7 +208,23 @@ els.zipForm.addEventListener('submit', async (e) => {
   }
 });
 
-/* -------------------- ZIP geocoder (Zippopotam.us) -------------------- */
+els.geoBtn.addEventListener('click', () => {
+  els.zipMsg.textContent = 'Requesting your location…';
+  if (!navigator.geolocation) {
+    els.zipMsg.textContent = 'Geolocation not available in this browser.';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { latitude, longitude } = pos.coords;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    // Label will be refined after NWS points returns city/state
+    openDynamicPlace({ key:`geo:${latitude.toFixed(4)},${longitude.toFixed(4)}`, label:'Your Location', lat: latitude, lon: longitude, tz });
+  }, (err) => {
+    els.zipMsg.textContent = `Location error: ${err.message}`;
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+}, { passive: true });
+
+/* -------------------- ZIP geocoder -------------------- */
 async function lookupZip(zip) {
   const url = `https://api.zippopotam.us/us/${zip}`;
   const res = await fetch(url);
@@ -229,10 +256,10 @@ function openPlace(key) { openDetail(key, PLACES[key]); }
 function openDynamicPlace(p) { openDetail(p.key, p); }
 
 function openDetail(key, place) {
-  cancelInFlight();                    // stop any prior loads
+  cancelInFlight();
   currentPlaceKey = key;
   currentPlace = place;
-  resetDetail(place);                  // show dashes immediately
+  resetDetail(place);                  // dashes instantly
   els.home.style.display = 'none';
   els.detail.style.display = '';
   history.replaceState({}, '', `#/${encodeURIComponent(key)}`);
@@ -253,7 +280,7 @@ function resetDetail(place) {
   els.observed.textContent = 'Observed —';
   els.station.textContent = '—';
   els.days.innerHTML = '';
-  drawHourly([]);                      // clears chart area
+  drawHourly([]);                      // clear chart
   els.majorTimes.textContent = '—';
   els.minorTimes.textContent = '—';
   els.obsApiLink.href = '#';
@@ -280,22 +307,25 @@ function cancelInFlight() {
   return runningController;
 }
 
-/* -------------------- Day card -------------------- */
+/* -------------------- Day card (adds wind) -------------------- */
 function dayCard(period) {
   const div = document.createElement('div');
   div.className = 'day';
   const tempText = period.temperature != null ? `${period.temperature}°${period.temperatureUnit}` : '—';
-  div.innerHTML = `<h3>${period.name || new Date(period.startTime).toLocaleDateString(undefined,{weekday:'short'})}</h3>
-                   <div class="t">${tempText}</div>
-                   <div class="muted" style="font-size:12px">${period.shortForecast || ''}</div>`;
+  const windText = (period.windSpeed || '—') + (period.windDirection ? ` ${period.windDirection}` : '');
+  div.innerHTML = `
+    <h3>${period.name || new Date(period.startTime).toLocaleDateString(undefined,{weekday:'short'})}</h3>
+    <div class="t">${tempText}</div>
+    <div class="w">Wind: ${windText}</div>
+    <div class="muted" style="font-size:12px">${period.shortForecast || ''}</div>`;
   return div;
 }
 
-/* -------------------- Canvas chart -------------------- */
+/* -------------------- Canvas chart (Temp + Wind) -------------------- */
 function setupCanvas() {
   const dpr = window.devicePixelRatio || 1;
   const cssW = els.canvas.clientWidth || 1100;
-  const cssH = els.canvas.clientHeight || 320;
+  const cssH = els.canvas.clientHeight || 340;
   els.canvas.width = Math.round(cssW * dpr);
   els.canvas.height = Math.round(cssH * dpr);
   const ctx = els.canvas.getContext('2d');
@@ -308,55 +338,73 @@ const hourLabel = d => d.toLocaleTimeString([], { hour: 'numeric' });
 function drawHourly(points){
   const { ctx, W, H } = setupCanvas();
   ctx.clearRect(0,0,W,H);
+  const pad = { l:50, r:44, t:14, b:34 };
+  // axes baseline when empty
   if (!points || points.length === 0) {
     ctx.strokeStyle = 'rgba(230,238,247,0.12)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(46, H-34); ctx.lineTo(W-10, H-34); ctx.stroke();
-    hourlyPlotState = { x:()=>0, y:()=>0, points:[] };
+    ctx.beginPath(); ctx.moveTo(pad.l, H-pad.b); ctx.lineTo(W-pad.r, H-pad.b); ctx.stroke();
+    hourlyPlotState = { x:()=>0, yT:()=>0, yW:()=>0, points:[] };
     return;
   }
-  const pad = { l:46, r:10, t:14, b:34 };
   const chartW = W - pad.l - pad.r, chartH = H - pad.t - pad.b;
-  const vals = points.map(p=>p.temp).filter(Number.isFinite);
-  const tMin = Math.min(...vals), tMax = Math.max(...vals);
-  const range = Math.max(4, tMax - tMin);
-  const yMin = Math.floor(tMin - Math.max(2, range*0.1));
-  const yMax = Math.ceil(tMax + Math.max(2, range*0.1));
-  const x = i => pad.l + (i/(points.length-1))*chartW;
-  const y = v => pad.t + (1 - (v - yMin)/(yMax - yMin))*chartH;
 
-  // grid
+  const temps = points.map(p=>p.temp).filter(Number.isFinite);
+  const winds = points.map(p=>p.wind).filter(Number.isFinite);
+
+  const tMin = Math.min(...temps), tMax = Math.max(...temps);
+  const wMin = 0, wMax = Math.max(5, Math.max(...winds)); // wind floor 0..max
+
+  const tRange = Math.max(4, tMax - tMin);
+  const yTmin = Math.floor(tMin - Math.max(2, tRange*0.1));
+  const yTmax = Math.ceil(tMax + Math.max(2, tRange*0.1));
+
+  const x = i => pad.l + (i/(points.length-1))*chartW;
+  const yT = v => pad.t + (1 - (v - yTmin)/(yTmax - yTmin))*chartH;     // Temp axis (left)
+  const yW = v => pad.t + (1 - (v - wMin)/(wMax - wMin))*chartH;        // Wind axis (right)
+
+  // grid (horizontal)
   ctx.strokeStyle = 'rgba(230,238,247,0.12)'; ctx.lineWidth = 1; ctx.beginPath();
-  const step = niceStep((yMax - yMin)/6);
-  for (let v=Math.ceil(yMin/step)*step; v<=yMax; v+=step){ const yy = y(v); ctx.moveTo(pad.l,yy); ctx.lineTo(W-pad.r,yy); }
+  const tStep = niceStep((yTmax - yTmin)/6);
+  for (let v=Math.ceil(yTmin/tStep)*tStep; v<=yTmax; v+=tStep){ const yy=yT(v); ctx.moveTo(pad.l,yy); ctx.lineTo(W-pad.r,yy); }
   ctx.stroke();
 
-  // y labels
+  // y labels (left: temp)
   ctx.fillStyle = '#9fb3c8'; ctx.font = '12px -apple-system, Segoe UI, Roboto, Helvetica, Arial';
   ctx.textAlign='right'; ctx.textBaseline='middle';
-  for (let v=Math.ceil(yMin/step)*step; v<=yMax; v+=step){ ctx.fillText(`${Math.round(v)}°F`, pad.l-8, y(v)); }
+  for (let v=Math.ceil(yTmin/tStep)*tStep; v<=yTmax; v+=tStep){ ctx.fillText(`${Math.round(v)}°F`, pad.l-8, yT(v)); }
+
+  // y labels (right: wind)
+  const wStep = niceStep((wMax - wMin)/5);
+  ctx.textAlign='left';
+  for (let v=Math.ceil(wMin/wStep)*wStep; v<=wMax; v+=wStep){ ctx.fillText(`${Math.round(v)} mph`, W - pad.r + 8, yW(v)); }
 
   // x labels each 3 hours
   ctx.textAlign='center'; ctx.textBaseline='top';
-  for (let i=0;i<points.length;i+=3){ ctx.fillText(hourLabel(points[i].time), x(i), H - 34 + 8); }
+  for (let i=0;i<points.length;i+=3){ ctx.fillText(hourLabel(points[i].time), x(i), H - pad.b + 8); }
 
-  // line
+  // temp line
   ctx.beginPath();
-  for (let i=0; i<points.length; i++){ const xx=x(i), yy=y(points[i].temp); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
+  for (let i=0;i<points.length;i++){ const xx=x(i), yy=yT(points[i].temp); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
   ctx.strokeStyle = '#6ee7ff'; ctx.lineWidth = 2.25; ctx.stroke();
-
-  // points
+  // temp points
   ctx.fillStyle = '#e6eef7';
-  for (let i=0;i<points.length;i++){ const xx=x(i), yy=y(points[i].temp); ctx.beginPath(); ctx.arc(xx,yy,3,0,Math.PI*2); ctx.fill(); }
+  for (let i=0;i<points.length;i++){ const xx=x(i), yy=yT(points[i].temp); ctx.beginPath(); ctx.arc(xx,yy,3,0,Math.PI*2); ctx.fill(); }
 
-  hourlyPlotState = { x, y, points };
+  // wind line
+  ctx.beginPath();
+  for (let i=0;i<points.length;i++){ const xx=x(i), yy=yW(points[i].wind); if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--wind') || '#ffd27a';
+  ctx.lineWidth = 2; ctx.setLineDash([4,3]); ctx.stroke(); ctx.setLineDash([]);
+
+  hourlyPlotState = { x, yT, yW, points };
 }
 
 function nearestPoint(px,py){
   if(!hourlyPlotState) return null;
-  const { x,y,points } = hourlyPlotState;
+  const { x, yT, points } = hourlyPlotState;
   let best=null, bestDist=1e9;
   for (let i=0;i<points.length;i++){
-    const dx = x(i)-px, dy=y(points[i].temp)-py, d=Math.hypot(dx,dy);
+    const dx = x(i)-px, dy=yT(points[i].temp)-py, d=Math.hypot(dx,dy);
     if(d<bestDist){ bestDist=d; best = {i, p:points[i], d}; }
   }
   return best;
@@ -368,7 +416,8 @@ function nearestPoint(px,py){
     const hit = nearestPoint(clientX - r.left, clientY - r.top);
     if(!hit || hit.d>28){ tip.style.display='none'; return; }
     tip.style.display='block';
-    tip.textContent = `${hourLabel(hit.p.time)} • ${Math.round(hit.p.temp)}°F${hit.p.short? ' • '+hit.p.short:''}`;
+    const p = hit.p;
+    tip.textContent = `${hourLabel(p.time)} • ${Math.round(p.temp)}°F • Wind ${Math.round(p.wind)} mph${p.windDir? ' '+p.windDir:''}`;
     tip.style.left = `${clientX - r.left}px`; tip.style.top = `${clientY - r.top}px`;
   };
   c.addEventListener('mousemove', e=>show(e.clientX,e.clientY), {passive:true});
@@ -378,116 +427,66 @@ function nearestPoint(px,py){
   window.addEventListener('resize', ()=>{ if(hourlyPlotState) drawHourly(hourlyPlotState.points); }, {passive:true});
 })();
 
-/* -------------------- Local solunar calculation --------------------
-   Approach:
-   - Compute moonrise / moonset for the selected location and date.
-   - Sample moon altitude each 5 min to find transit (highest altitude) ≈ overhead.
-   - Underfoot ≈ transit ± 12h.
-   - Major periods: 2 hours centered on transit and underfoot.
-   - Minor periods: 1 hour centered on rise and set (if they occur today).
-   This avoids external CORS issues.
--------------------------------------------------------------------- */
+/* -------------------- Local solunar (same as before) -------------------- */
 function toDateInTZ(tz, d=new Date()){
-  // Keep calendar date in tz
   const parts = new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d)
     .reduce((a,c)=>{a[c.type]=c.value;return a;},{});
   return new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00`);
 }
-function pad2(n){ return n<10 ? '0'+n : ''+n; }
-function fmtHM(d, tz){
-  const f = new Intl.DateTimeFormat([], { timeZone: tz, hour:'2-digit', minute:'2-digit' });
-  return f.format(d);
-}
-// Minimal Sun/Moon math based on public-domain formulas (adapted, compact).
+function fmtHM(d, tz){ return new Intl.DateTimeFormat([], { timeZone: tz, hour:'2-digit', minute:'2-digit' }).format(d); }
 const PI = Math.PI, sin = Math.sin, cos = Math.cos, tan = Math.tan, asin = Math.asin, atan2 = Math.atan2;
-function rad(x){ return x*PI/180; } function deg(x){ return x*180/PI; }
-function jdFromDate(date){ return date/86400000 + 2440587.5; }
-function dateFromJD(jd){ return new Date((jd - 2440587.5)*86400000); }
-function lst(jd, lon){ // local sidereal time (radians)
-  const d = jd - 2451545.0;
-  const LST = rad((280.46061837 + 360.98564736629*d) % 360) + lon;
-  return LST;
-}
-function moonCoords(d) { // from approximate algorithms
-  const L = rad((218.316 + 13.176396*d) % 360);
-  const M = rad((134.963 + 13.064993*d) % 360);
-  const F = rad((93.272 + 13.229350*d) % 360);
-  const l = L + rad(6.289)*sin(M);
-  const b = rad(5.128)*sin(F);
-  const dt = 385001 - 20905*cos(M);
-  return { ra: atan2(sin(l)*cos(rad(23.4397)) - tan(b)*sin(rad(23.4397)), cos(l)), dec: asin(sin(b)*cos(rad(23.4397)) + cos(b)*sin(rad(23.4397))*sin(l)), dist: dt };
-}
-function moonPos(date, lat, lon){ // returns altitude (radians)
-  const jd = jdFromDate(date);
-  const d = jd - 2451545.0;
-  const mc = moonCoords(d);
-  const H = lst(jd, lon) - mc.ra;
-  const alt = asin( sin(lat)*sin(mc.dec) + cos(lat)*cos(mc.dec)*cos(H) );
-  return { alt, dec: mc.dec, H };
-}
-function getMoonTimes(date0, latDeg, lonDeg){ // rough moonrise/set for the date (local)
-  const lat = rad(latDeg), lon = rad(lonDeg);
-  // step through the day in 10-minute increments to find sign changes of altitude
-  const start = toDateInTZ('UTC', date0); // iterate in UTC to avoid DST jumps; alt uses UTC okay
-  const result = { rise: null, set: null };
-  let prevAlt = null, prevT = null;
-  for (let m=0; m<=24*60; m+=10){
-    const t = new Date(start.getTime() + m*60000);
-    const a = moonPos(t, lat, lon).alt - rad(0.125); // refraction
-    if (prevAlt !== null){
-      if (prevAlt <= 0 && a > 0 && !result.rise) result.rise = new Date((+prevT + +t)/2);
-      if (prevAlt >= 0 && a < 0 && !result.set)  result.set  = new Date((+prevT + +t)/2);
-    }
-    prevAlt = a; prevT = t;
-  }
-  return result;
-}
-function findTransit(date0, latDeg, lonDeg){
-  const lat = rad(latDeg), lon = rad(lonDeg);
-  const start = toDateInTZ('UTC', date0);
-  let bestAlt = -1e9, bestT = new Date(start);
-  for (let m=0; m<=24*60; m+=5){
-    const t = new Date(start.getTime() + m*60000);
-    const a = moonPos(t, lat, lon).alt;
-    if (a > bestAlt){ bestAlt = a; bestT = t; }
-  }
-  return bestT;
-}
+function rad(x){ return x*PI/180; } function jdFromDate(date){ return date/86400000 + 2440587.5; } function lst(jd, lon){ const d=jd-2451545.0; return ( ( (280.46061837 + 360.98564736629*d) % 360 ) * PI/180 ) + lon; }
+function moonCoords(d) { const L=rad((218.316+13.176396*d)%360), M=rad((134.963+13.064993*d)%360), F=rad((93.272+13.22935*d)%360), e=rad(23.4397); const l=L+rad(6.289)*sin(M); const b=rad(5.128)*sin(F); return { ra: atan2(sin(l)*cos(e)-tan(b)*sin(e), cos(l)), dec: asin(sin(b)*cos(e)+cos(b)*sin(e)*sin(l)) }; }
+function moonPos(date, lat, lon){ const jd=jdFromDate(date), d=jd-2451545.0, mc=moonCoords(d), H=lst(jd,lon)-mc.ra; const alt=asin( sin(lat)*sin(mc.dec) + cos(lat)*cos(mc.dec)*cos(H) ); return { alt }; }
+function getMoonTimes(date0, latDeg, lonDeg){ const lat=rad(latDeg), lon=rad(lonDeg); const start=toDateInTZ('UTC',date0); const result={ rise:null,set:null }; let prevAlt=null, prevT=null; for (let m=0;m<=24*60;m+=10){ const t=new Date(+start+m*60000); const a=moonPos(t,lat,lon).alt - rad(0.125); if(prevAlt!==null){ if(prevAlt<=0 && a>0 && !result.rise) result.rise=new Date((+prevT + +t)/2); if(prevAlt>=0 && a<0 && !result.set) result.set=new Date((+prevT + +t)/2); } prevAlt=a; prevT=t; } return result; }
+function findTransit(date0, latDeg, lonDeg){ const lat=rad(latDeg), lon=rad(lonDeg); const start=toDateInTZ('UTC',date0); let bestAlt=-1e9,bestT=new Date(start); for(let m=0;m<=24*60;m+=5){ const t=new Date(+start+m*60000); const a=moonPos(t,lat,lon).alt; if(a>bestAlt){bestAlt=a;bestT=t;} } return bestT; }
 function solunarWindows(date0, lat, lon, tz){
   const times = getMoonTimes(date0, lat, lon);
   const transit = findTransit(date0, lat, lon);
   const underfoot = new Date(+transit + 12*3600*1000);
-
   const major1 = [new Date(+transit - 60*60*1000), new Date(+transit + 60*60*1000)];
   const major2 = [new Date(+underfoot - 60*60*1000), new Date(+underfoot + 60*60*1000)];
-
   const minor = [];
   if (times.rise) minor.push([new Date(+times.rise - 30*60*1000), new Date(+times.rise + 30*60*1000)]);
   if (times.set)  minor.push([new Date(+times.set  - 30*60*1000), new Date(+times.set  + 30*60*1000)]);
-
   const fmt = r => `${fmtHM(r[0], tz)}–${fmtHM(r[1], tz)}`;
   const majors = `${fmt(major1)} · ${fmt(major2)}`;
   const minors = minor.length ? minor.map(fmt).join(' · ') : '—';
   return { majors, minors };
 }
 
-/* -------------------- Main load (with cancellation & placeholders) -------------------- */
+/* -------------------- Utilities -------------------- */
+function parseWindMph(str){
+  // Examples: "5 mph", "10 to 15 mph", "15 mph", "Light", null
+  if (!str) return NaN;
+  const nums = (str.match(/\d+/g) || []).map(n=>parseInt(n,10));
+  if (nums.length === 0) return NaN;
+  if (nums.length === 1) return nums[0];
+  // take the higher value for the next-hour gust potential
+  return Math.max(...nums);
+}
+
+/* -------------------- Main load -------------------- */
 async function loadAll(place){
-  const ctl = cancelInFlight();     // new controller; also resets previous fetches
+  const ctl = cancelInFlight();
   setStatus('Loading…');
   els.refresh.disabled = true;
 
   try {
-    // NWS points
+    // Points
     const pointsUrl = `https://api.weather.gov/points/${place.lat},${place.lon}`;
     const points = await fetchJson(pointsUrl, 'application/geo+json', ctl);
     const props = points.properties || {};
     const rel = props.relativeLocation?.properties;
-    els.placeMeta.textContent = rel?.city && rel?.state
-      ? `${rel.city}, ${rel.state} • ${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`
-      : `${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`;
+    if (rel?.city && rel?.state) {
+      els.placeTitle.textContent = place.label && place.label !== 'Your Location' ? place.label : `${rel.city}, ${rel.state}`;
+      els.placeMeta.textContent = `${rel.city}, ${rel.state} • ${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`;
+    } else {
+      els.placeTitle.textContent = place.label || '—';
+      els.placeMeta.textContent = `${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`;
+    }
 
-    // Observations (nearest station)
+    // Observations
     const stationsUrl = props.observationStations;
     const stations = await fetchJson(stationsUrl, 'application/geo+json', ctl);
     const s0 = stations.features?.[0];
@@ -508,8 +507,9 @@ async function loadAll(place){
     if (tempC != null) { els.temp.textContent = `${Math.round((tempC*9/5)+32)}`; els.unit.textContent = '°F'; }
     els.observed.textContent = lp.timestamp ? new Date(lp.timestamp).toLocaleString() : 'Observed —';
 
-    // Daily forecast (7 unique days)
+    // Daily forecast (7 unique days) + wind
     els.dailyApiLink.href = props.forecast || '#';
+    els.days.innerHTML = '';
     if (props.forecast) {
       const daily = await fetchJson(props.forecast, 'application/geo+json', ctl);
       const periods = daily.properties?.periods || [];
@@ -519,27 +519,30 @@ async function loadAll(place){
         if (!seen.has(k)) { days.push(p); seen.add(k); }
         if (days.length >= 7) break;
       }
-      els.days.innerHTML = ''; days.forEach(p => els.days.appendChild(dayCard(p)));
-    } else {
-      els.days.innerHTML = '';
+      days.forEach(p => els.days.appendChild(dayCard(p)));
     }
 
-    // Hourly (next 24) → graph
+    // Hourly next 24 → temp + wind line
     els.hourlyApiLink.href = props.forecastHourly || '#';
     if (props.forecastHourly) {
       const hourly = await fetchJson(props.forecastHourly, 'application/geo+json', ctl);
       const h = (hourly.properties?.periods || []).slice(0,24);
-      const pts = h.map(p => ({
-        time: new Date(p.startTime),
-        temp: p.temperatureUnit === 'F' ? p.temperature : Math.round((p.temperature*9/5)+32),
-        short: p.shortForecast || ''
-      }));
+      const pts = h.map(p => {
+        const tF = p.temperatureUnit === 'F' ? p.temperature : Math.round((p.temperature*9/5)+32);
+        const wMph = parseWindMph(p.windSpeed);
+        return {
+          time: new Date(p.startTime),
+          temp: tF,
+          wind: isNaN(wMph) ? 0 : wMph,
+          windDir: p.windDirection || ''
+        };
+      });
       drawHourly(pts);
     } else {
       drawHourly([]);
     }
 
-    // Solunar (computed locally)
+    // Solunar
     const todayLocal = toDateInTZ(place.tz, new Date());
     const { majors, minors } = solunarWindows(todayLocal, place.lat, place.lon, place.tz);
     els.majorTimes.textContent = majors;
@@ -547,7 +550,7 @@ async function loadAll(place){
 
     setStatus('Live data loaded.', 'ok');
   } catch (e) {
-    if (e.name === 'AbortError') return; // ignore cancels on fast switches
+    if (e.name === 'AbortError') return;
     setStatus(`Unable to load: ${e.message}`, 'err');
   } finally {
     els.refresh.disabled = false;
@@ -556,7 +559,7 @@ async function loadAll(place){
 
 els.refresh.addEventListener('click', () => currentPlace && loadAll(currentPlace), { passive:true });
 
-/* -------------------- Deep-link reload if needed -------------------- */
+/* -------------------- Deep-link -------------------- */
 window.addEventListener('DOMContentLoaded', () => {
   if (location.hash.startsWith('#/')) {
     const k = decodeURIComponent(location.hash.slice(2));
