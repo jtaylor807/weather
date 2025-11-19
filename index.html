@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Weather + Solunar • Saved Locations</title>
+  <title>Weather + Solunar • Saved Locations + Tides</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <style>
     :root { color-scheme: dark; --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3; --wind:#ffd27a; --pop:#9ea7ff; --dew:#7ae2a5; }
@@ -42,16 +42,25 @@
     .toggle{border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04);padding:8px 10px;border-radius:10px;cursor:pointer;font-weight:700}
     .toggle.active{outline:2px solid rgba(110,231,255,.45)}
 
-    /* ZIP form: "Your location" full-width row UNDER the ZIP field */
+    /* ZIP form */
     .zipgrid{display:grid;grid-template-columns:1fr auto;grid-template-areas:"zip go" "geo geo";gap:10px;margin-top:12px}
     #zipInput{grid-area:zip}
     #zipGo{grid-area:go}
     #geoBtn{grid-area:geo;width:100%}
 
+    /* Tides */
+    .tideGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    .tideDay{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:10px}
+    .tideDay h3{margin:0 0 6px;font-size:14px}
+    .tideTbl{width:100%;border-collapse:collapse;font-size:13px}
+    .tideTbl td{padding:4px 6px;border-top:1px solid rgba(255,255,255,.08)}
+    .hi{color:#8ee58e} .lo{color:#f7a8b8}
+
     @media (max-width:900px){
       .choices{grid-template-columns:1fr}
       .grid-3{grid-template-columns:1fr}
       .grid-7{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .tideGrid{grid-template-columns:1fr 1fr}
       .chart-wrap{height:300px}
       .temp{font-size:40px}
     }
@@ -63,7 +72,6 @@
   <div id="view-home" class="card">
     <div class="title">
       <h1>Saved locations</h1>
-      <!-- Install button removed -->
     </div>
 
     <div id="savedList" class="choices" style="margin-top:12px"></div>
@@ -79,7 +87,7 @@
     </div>
 
     <div class="muted" style="margin-top:10px">
-      Weather: National Weather Service (api.weather.gov). Solunar: computed locally (major/minor windows).
+      Weather: National Weather Service (api.weather.gov). Tides: NOAA CO-OPS (api.tidesandcurrents.noaa.gov). Solunar: computed locally.
     </div>
   </div>
 
@@ -141,6 +149,13 @@
       </div>
     </div>
 
+    <!-- TIDES -->
+    <div id="tidesCard" class="card" style="display:none">
+      <h2 style="margin:0 0 8px">Tide Predictions (Today + 3 days)</h2>
+      <div class="muted" id="tideStationLbl" style="margin-bottom:6px">—</div>
+      <div id="tideGrid" class="tideGrid"></div>
+    </div>
+
     <!-- SOLUNAR -->
     <div class="card">
       <h2 style="margin:0 0 8px">Major / Minor Lunar Times (Today)</h2>
@@ -160,7 +175,7 @@
 let hourlyPlotState=null, hourlyAll=[], flags={temp:true,wind:true,pop:false,dew:false};
 let currentPlaceKey=null, currentPlace=null, runningController=null;
 
-/* Built-in seeds (look exactly like saved buttons; removable) */
+/* Seed saved locations (look identical to user-saved, can remove) */
 const SEEDS = [
   { key:'queencreek', label:'Queen Creek, AZ', lat:33.2425, lon:-111.6343, tz:'America/Phoenix' },
   { key:'sunnyvale',  label:'Sunnyvale, CA',    lat:37.3688, lon:-122.0363, tz:'America/Los_Angeles' },
@@ -194,60 +209,49 @@ const els = {
   zipForm:document.getElementById('zipForm'),
   zipInput:document.getElementById('zipInput'),
   geoBtn:document.getElementById('geoBtn'),
-  zipMsg:document.getElementById('zipMsg')
+  zipMsg:document.getElementById('zipMsg'),
+  tidesCard:document.getElementById('tidesCard'),
+  tideGrid:document.getElementById('tideGrid'),
+  tideStationLbl:document.getElementById('tideStationLbl')
 };
 
-/* =================== SAVED LOCATIONS (localStorage) =================== */
+/* =================== SAVED LOCATIONS =================== */
 const SAVED_KEY='wx.savedPlaces.v1';
-
 function loadSaved(){
   try{
     const raw=localStorage.getItem(SAVED_KEY);
     if(raw){ return JSON.parse(raw); }
-    // seed first time with built-ins
     localStorage.setItem(SAVED_KEY, JSON.stringify(SEEDS));
     return [...SEEDS];
   }catch{ return [...SEEDS]; }
 }
 function saveSaved(arr){ localStorage.setItem(SAVED_KEY, JSON.stringify(arr)); renderSaved(); }
-
 function renderSaved(){
   const list=loadSaved();
   els.savedList.innerHTML='';
   list.forEach(p=>{
     const d=document.createElement('div'); d.className='choice'; d.dataset.key=p.key;
     d.innerHTML=`${p.label}<button class="remove" title="Remove" data-remove="${p.key}">×</button>`;
-    d.addEventListener('click', (e)=>{ if(e.target.dataset.remove) return; openDetail(p.key, p); }, {passive:true});
-    d.querySelector('.remove').addEventListener('click', (e)=>{ e.stopPropagation(); removeSaved(p.key); }, {passive:true});
+    d.addEventListener('click',(e)=>{ if(e.target.dataset.remove) return; openDetail(p.key,p); },{passive:true});
+    d.querySelector('.remove').addEventListener('click',(e)=>{ e.stopPropagation(); removeSaved(p.key); },{passive:true});
     els.savedList.appendChild(d);
   });
 }
-
 function upsertSaved(place){
   const list=loadSaved();
-  const id = place.key;
-  if(!list.find(p=>p.key===id)){
-    const item={ key:id, label:place.label, lat:place.lat, lon:place.lon, tz:place.tz || '' };
-    list.push(item); saveSaved(list);
+  if(!list.find(p=>p.key===place.key)){
+    list.push({ key:place.key, label:place.cityState||place.label, lat:place.lat, lon:place.lon, tz:place.tz||'' });
+    saveSaved(list);
   }
   updateSaveButtons();
 }
-function removeSaved(key){
-  const list=loadSaved().filter(p=>p.key!==key);
-  saveSaved(list);
-  if(currentPlaceKey===key){ updateSaveButtons(); }
-}
-
+function removeSaved(key){ saveSaved(loadSaved().filter(p=>p.key!==key)); if(currentPlaceKey===key) updateSaveButtons(); }
 function isSaved(key){ return loadSaved().some(p=>p.key===key); }
-function updateSaveButtons(){
-  const saved=isSaved(currentPlaceKey);
-  els.saveBtn.textContent = saved ? 'Saved ✓' : 'Save';
-  els.removeBtn.disabled = !saved;
-}
+function updateSaveButtons(){ const s=isSaved(currentPlaceKey); els.saveBtn.textContent=s?'Saved ✓':'Save'; els.removeBtn.disabled=!s; }
 
 /* =================== NAV / INTERACTIONS =================== */
 els.back.addEventListener('click', ()=>{ cancelInFlight(); els.detail.style.display='none'; els.home.style.display=''; history.replaceState({}, '', '#/'); renderSaved(); }, {passive:true});
-els.saveBtn.addEventListener('click', ()=>{ if(currentPlace && currentPlace.cityState){ upsertSaved({ ...currentPlace, label: currentPlace.cityState }); } }, {passive:true});
+els.saveBtn.addEventListener('click', ()=>{ if(currentPlace){ upsertSaved(currentPlace); } }, {passive:true});
 els.removeBtn.addEventListener('click', ()=>{ if(currentPlaceKey) removeSaved(currentPlaceKey); }, {passive:true});
 els.shareBtn.addEventListener('click', ()=>{
   if(!currentPlace) return;
@@ -312,13 +316,14 @@ function resetDetail(place){
   els.temp.textContent='—'; els.unit.textContent='°F'; els.observed.textContent='Observed —'; els.station.textContent='—';
   els.days.innerHTML=''; drawHourly([]); els.majorTimes.textContent='—'; els.minorTimes.textContent='—';
   els.obsApiLink.href=els.dailyApiLink.href=els.hourlyApiLink.href='#'; setStatus('Loading…');
+  els.tidesCard.style.display='none'; els.tideGrid.innerHTML=''; els.tideStationLbl.textContent='—';
   flags={temp:true,wind:true,pop:false,dew:false};
   document.querySelectorAll('.toggle').forEach(b=>b.classList.toggle('active', flags[b.dataset.series]));
 }
 async function fetchJson(url, accept='application/geo+json', ctl){ const res=await fetch(url,{headers:{Accept:accept},signal:ctl?.signal}); if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`); return res.json(); }
 function cancelInFlight(){ if(runningController) try{runningController.abort()}catch{} runningController=new AbortController(); return runningController; }
 
-/* 7-day HL */
+/* =================== 7-day HL =================== */
 function dayCardHL(d){
   const div=document.createElement('div'); div.className='day';
   div.innerHTML = `<h3>${d.name}</h3>
@@ -341,7 +346,7 @@ function buildHighLow(periods){
   return Array.from(byDay.values()).slice(0,7);
 }
 
-/* Chart + toggles (temp/wind/precip/dew) */
+/* =================== Chart + toggles (Temp/Wind/Precip/Dew) =================== */
 function setupCanvas(){ const dpr=window.devicePixelRatio||1, cssW=els.canvas.clientWidth||1100, cssH=els.canvas.clientHeight||360;
   els.canvas.width=Math.round(cssW*dpr); els.canvas.height=Math.round(cssH*dpr);
   const ctx=els.canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); return {ctx,W:cssW,H:cssH}; }
@@ -368,21 +373,26 @@ function drawHourly(points){
   const lmin=Math.floor(Math.min(...(leftVals.length?leftVals:[0])));
   const lmax=Math.ceil(Math.max(...(leftVals.length?leftVals:[1])));
   const rmin=0;
+  // Right axis must accommodate wind mph and precip %, so choose max of wind (mph) and 100 (for %)
   const rmax=Math.max(100, Math.ceil(Math.max(...(rightVals.length?rightVals:[5]))));
   const x=i=>pad.l+(i/(points.length-1))*chartW;
   const yL=v=>pad.t+(1-(v-lmin)/(lmax-lmin))*chartH;
   const yR=v=>pad.t+(1-(v-rmin)/(rmax-rmin))*chartH;
 
+  // Grid
   ctx.strokeStyle='rgba(230,238,247,0.12)'; ctx.beginPath();
   const tStep=niceStep((lmax-lmin)/6);
   for(let v=Math.ceil(lmin/tStep)*tStep; v<=lmax; v+=tStep){ const yy=yL(v); ctx.moveTo(pad.l,yy); ctx.lineTo(W-pad.r,yy); }
   ctx.stroke();
 
+  // Left labels (°F)
   ctx.fillStyle='#9fb3c8'; ctx.font='12px -apple-system, Segoe UI, Roboto, Helvetica, Arial'; ctx.textAlign='right'; ctx.textBaseline='middle';
   for(let v=Math.ceil(lmin/tStep)*tStep; v<=lmax; v+=tStep){ ctx.fillText(`${Math.round(v)}°F`, pad.l-8, yL(v)); }
+  // Right labels (numeric only; units handled by legend/tooltips so wind is clearly mph)
   const rStep=niceStep((rmax-rmin)/5); ctx.textAlign='left';
-  for(let v=Math.ceil(rmin/rStep)*rStep; v<=rmax; v+=rStep){ ctx.fillText(`${Math.round(v)}${v<=100?'%':''}`, W-pad.r+8, yR(v)); }
+  for(let v=Math.ceil(rmin/rStep)*rStep; v<=rmax; v+=rStep){ ctx.fillText(`${Math.round(v)}`, W-pad.r+8, yR(v)); }
 
+  // Hour labels
   ctx.textAlign='center'; ctx.textBaseline='top';
   for(let i=0;i<points.length;i+=3){ ctx.fillText(hourLabel(points[i].time), x(i), H-pad.b+8); }
 
@@ -394,8 +404,8 @@ function drawHourly(points){
   }
   if(flags.temp) drawSeries(yL, '#6ee7ff', p=>p.temp);
   if(flags.dew)  drawSeries(yL, getCSS('--dew','#7ae2a5'), p=>p.dew);
-  if(flags.wind) drawSeries(yR, getCSS('--wind','#ffd27a'), p=>p.wind, true);
-  if(flags.pop)  drawSeries(yR, getCSS('--pop','#9ea7ff'), p=>p.pop, true);
+  if(flags.wind) drawSeries(yR, getCSS('--wind','#ffd27a'), p=>p.wind, true);   // mph
+  if(flags.pop)  drawSeries(yR, getCSS('--pop','#9ea7ff'), p=>p.pop,  true);    // %
 
   hourlyPlotState={x, points, yL, yR};
 }
@@ -423,7 +433,7 @@ function getCSS(name, fallback){ return getComputedStyle(document.documentElemen
   });
 })();
 
-/* Solunar (local) */
+/* =================== Solunar =================== */
 function toDateInTZ(tz, d=new Date()){ const p=new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d).reduce((a,c)=>{a[c.type]=c.value;return a;},{}); return new Date(`${p.year}-${p.month}-${p.day}T00:00:00`); }
 function fmtHM(d, tz){ return new Intl.DateTimeFormat([], { timeZone: tz, hour:'2-digit', minute:'2-digit' }).format(d); }
 const PI=Math.PI, sin=Math.sin, cos=Math.cos, asin=Math.asin, atan2=Math.atan2;
@@ -434,10 +444,11 @@ function getMoonTimes(date0,latDeg,lonDeg){const lat=rad(latDeg),lon=rad(lonDeg)
 function findTransit(date0,latDeg,lonDeg){const lat=rad(latDeg),lon=rad(lonDeg);const start=toDateInTZ('UTC',date0);let ba=-1e9,bt=new Date(start);for(let m=0;m<=1440;m+=5){const t=new Date(+start+m*60000);const a=moonPos(t,lat,lon).alt;if(a>ba){ba=a;bt=t}}return bt}
 function solunarWindows(date0,lat,lon,tz){const times=getMoonTimes(date0,lat,lon);const transit=findTransit(date0,lat,lon);const underfoot=new Date(+transit+12*3600*1000);const major1=[new Date(+transit-3600*1000),new Date(+transit+3600*1000)],major2=[new Date(+underfoot-3600*1000),new Date(+underfoot+3600*1000)];const minor=[];if(times.rise)minor.push([new Date(+times.rise-30*60*1000),new Date(+times.rise+30*60*1000)]);if(times.set)minor.push([new Date(+times.set-30*60*1000),new Date(+times.set+30*60*1000)]);const fmt=r=>`${fmtHM(r[0],tz)}–${fmtHM(r[1],tz)}`;return{majors:`${fmt(major1)} · ${fmt(major2)}`,minors:minor.length?minor.map(fmt).join(' · '):'—'}}
 
-/* Utilities */
+/* =================== Utilities =================== */
 function parseWindMph(str){ const m=(str&&str.match(/\d+/g))?str.match(/\d+/g).map(n=>parseInt(n,10)):[]; return m.length?Math.max(...m):NaN; }
+function haversineMi(lat1,lon1,lat2,lon2){ const R=3958.7613; const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180, dφ=(lat2-lat1)*Math.PI/180, dλ=(lon2-lon1)*Math.PI/180; const a=Math.sin(dφ/2)**2+Math.cos(φ1)*Math.cos(φ2)*Math.sin(dλ/2)**2; return 2*R*Math.asin(Math.sqrt(a)); }
 
-/* Loader */
+/* =================== Loader =================== */
 async function loadAll(place){
   const ctl=cancelInFlight(); setStatus('Loading…'); els.refresh.disabled=true;
   try{
@@ -466,13 +477,14 @@ async function loadAll(place){
     if(tempC!=null){ els.temp.textContent=`${Math.round((tempC*9/5)+32)}`; els.unit.textContent='°F'; }
     els.observed.textContent = lp.timestamp ? new Date(lp.timestamp).toLocaleString() : 'Observed —';
 
+    // Daily HL
     els.dailyApiLink.href=props.forecast||'#'; els.days.innerHTML='';
     if(props.forecast){
       const daily=await fetchJson(props.forecast,'application/geo+json',ctl);
-      const per=daily.properties?.periods||[];
-      buildHighLow(per).forEach(d=>els.days.appendChild(dayCardHL(d)));
+      (buildHighLow(daily.properties?.periods||[])).forEach(d=>els.days.appendChild(dayCardHL(d)));
     }
 
+    // Hourly all fields
     els.hourlyApiLink.href=props.forecastHourly||'#';
     hourlyAll=[];
     if(props.forecastHourly){
@@ -489,8 +501,12 @@ async function loadAll(place){
       drawHourly(hourlyAll);
     } else { drawHourly([]); }
 
+    // Solunar
     const todayLocal=toDateInTZ(place.tz,new Date()); const {majors,minors}=solunarWindows(todayLocal,place.lat,place.lon,place.tz);
     els.majorTimes.textContent=majors; els.minorTimes.textContent=minors;
+
+    // Tides (if within ~50 miles of ocean; NOAA CO-OPS)
+    await loadTidesIfCoastal(place.lat, place.lon, place.tz);
 
     setStatus('Live data loaded.','ok');
   }catch(e){ if(e.name==='AbortError') return; setStatus(`Unable to load: ${e.message}`,'err'); }
@@ -498,7 +514,63 @@ async function loadAll(place){
 }
 els.refresh.addEventListener('click', ()=> currentPlace && loadAll(currentPlace), {passive:true});
 
-/* Deep-link + initial render */
+/* =================== TIDES =================== */
+/* Strategy:
+   1) Query NOAA CO-OPS metadata API for water level stations inside a bbox (~0.8° ~ 55–60 mi).
+   2) Choose nearest station; if distance <= 50 mi, fetch 4 days of H/L predictions (MLLW, local time, english units).
+*/
+async function loadTidesIfCoastal(lat, lon, tz){
+  try{
+    const pad = 0.8; // ~55–60 miles latitude-wise
+    const bbox = `${(lon-pad).toFixed(3)},${(lat-pad).toFixed(3)},${(lon+pad).toFixed(3)},${(lat+pad).toFixed(3)}`;
+    const meta = await fetch(`https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels&bbox=${bbox}`).then(r=>r.json());
+    const stations = (meta?.stations||[]).map(s=>({ id: s.id || s.stationId || s.station_id, name: s.name, lat: +s.lat, lon: +s.lng || +s.lon })).filter(s=>isFinite(s.lat)&&isFinite(s.lon));
+    if(!stations.length){ els.tidesCard.style.display='none'; return; }
+    let best = null, bd=1e9;
+    for(const s of stations){ const d=haversineMi(lat,lon,s.lat,s.lon); if(d<bd){bd=d; best=s;} }
+    if(bd>50){ els.tidesCard.style.display='none'; return; } // not coastal enough
+
+    const today = new Date();
+    const end   = new Date(today.getTime()+3*24*3600*1000);
+    const fmt = (d)=>`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&begin_date=${fmt(today)}&end_date=${fmt(end)}&datum=MLLW&station=${best.id}&time_zone=lst_ldt&units=english&interval=hilo&format=json`;
+    const pred = await fetch(url).then(r=>r.json());
+    const arr = pred?.predictions||[];
+
+    const byDate = new Map();
+    for(const p of arr){
+      const t = new Date(p.t);
+      const key = t.toDateString();
+      const list = byDate.get(key)||[];
+      list.push({ when:t, type:p.type, height: p.v });
+      byDate.set(key, list);
+    }
+
+    els.tideGrid.innerHTML='';
+    const dates = [0,1,2,3].map(i=>new Date(today.getTime()+i*24*3600*1000));
+    for(const d of dates){
+      const card = document.createElement('div'); card.className='tideDay';
+      const list = (byDate.get(d.toDateString())||[]).sort((a,b)=>a.when-b.when);
+      const title = d.toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' });
+      let rows = '';
+      if(list.length){
+        for(const it of list){
+          rows += `<tr><td class="${it.type==='H'?'hi':'lo'}">${it.type==='H'?'High':'Low'}</td><td>${it.when.toLocaleTimeString([], { hour:'numeric', minute:'2-digit' })}</td><td>${Number(it.height).toFixed(2)} ft</td></tr>`;
+        }
+      } else {
+        rows = `<tr><td colspan="3" class="muted">No data</td></tr>`;
+      }
+      card.innerHTML = `<h3>${title}</h3><table class="tideTbl">${rows}</table>`;
+      els.tideGrid.appendChild(card);
+    }
+    els.tideStationLbl.textContent = `Nearest NOAA station: ${best.name} (${best.id}) • ~${bd.toFixed(1)} mi`;
+    els.tidesCard.style.display='';
+  }catch{
+    els.tidesCard.style.display='none';
+  }
+}
+
+/* =================== Deep-link + initial render =================== */
 function openFromHash(){
   if(!location.hash.startsWith('#/')) return false;
   const frag=decodeURIComponent(location.hash.slice(2));
@@ -511,18 +583,11 @@ function openFromHash(){
     if(!isFinite(lat)||!isFinite(lon)) return false;
     openDetail(key,{key,label,lat,lon,tz}); return true;
   }
-  // If hash matches a saved key, open it
   const hit=loadSaved().find(x=>x.key===frag);
   if(hit){ openDetail(hit.key, hit); return true; }
   return false;
 }
-
-window.addEventListener('DOMContentLoaded', ()=>{
-  renderSaved();
-  if (!openFromHash()) {
-    // no auto-open; user taps a saved button or enters a ZIP
-  }
-});
+window.addEventListener('DOMContentLoaded', ()=>{ renderSaved(); if(!openFromHash()){ /* no auto-open */ }});
 </script>
 </body>
 </html>
