@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Weather + Solunar • Personal Default</title>
+  <title>Weather + Solunar • Saved Locations</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <style>
     :root { color-scheme: dark; --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3; --wind:#ffd27a; --pop:#9ea7ff; --dew:#7ae2a5; }
@@ -15,16 +15,10 @@
     .btn{background:linear-gradient(180deg,#1a2a45,#13243d);color:#e6f2ff;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:10px 14px;cursor:pointer;font-weight:700;font-size:15px;-webkit-tap-highlight-color:transparent}
     .btn:active{transform:translateY(1px)} .btn:disabled{opacity:.6;cursor:not-allowed}
     .choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-    .choice{background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.18);border-radius:16px;padding:16px;cursor:pointer;text-align:center;font-weight:700}
+    .choice{position:relative;background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.18);border-radius:16px;padding:16px;cursor:pointer;text-align:center;font-weight:700}
     .choice:hover{border-style:solid}
-
-    /* ZIP form: "Your location" full-width row UNDER the ZIP field */
-    .zipgrid{display:grid;grid-template-columns:1fr auto;grid-template-areas:"zip go" "geo geo";gap:10px;margin-top:12px}
-    #zipInput{grid-area:zip}
-    #zipGo{grid-area:go}
-    #geoBtn{grid-area:geo;width:100%}
-
-    .input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:12px 14px;color:#e6eef7;font-size:16px}
+    .remove{position:absolute;top:6px;right:6px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:999px;width:24px;height:24px;line-height:22px;font-size:14px;font-weight:900;cursor:pointer}
+    .remove:hover{background:rgba(255,255,255,.18)}
     .muted{color:var(--muted)}
     .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
     .grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:10px}
@@ -47,6 +41,13 @@
     .toggles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
     .toggle{border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04);padding:8px 10px;border-radius:10px;cursor:pointer;font-weight:700}
     .toggle.active{outline:2px solid rgba(110,231,255,.45)}
+
+    /* ZIP form: "Your location" full-width row UNDER the ZIP field */
+    .zipgrid{display:grid;grid-template-columns:1fr auto;grid-template-areas:"zip go" "geo geo";gap:10px;margin-top:12px}
+    #zipInput{grid-area:zip}
+    #zipGo{grid-area:go}
+    #geoBtn{grid-area:geo;width:100%}
+
     @media (max-width:900px){
       .choices{grid-template-columns:1fr}
       .grid-3{grid-template-columns:1fr}
@@ -61,28 +62,14 @@
   <!-- HOME -->
   <div id="view-home" class="card">
     <div class="title">
-      <h1>Pick a place</h1>
-      <!-- Install button intentionally removed -->
+      <h1>Saved locations</h1>
+      <!-- Install button removed -->
     </div>
 
-    <div id="defaultBanner" class="card" style="display:none;padding:12px">
-      <div class="row" style="justify-content:space-between">
-        <div class="muted" id="defaultText">Default: —</div>
-        <div class="row">
-          <button class="btn" id="useDefaultBtn">Use default</button>
-          <button class="btn" id="clearDefaultBtn">Clear</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="choices" style="margin-top:12px">
-      <div class="choice" data-place="queencreek">Queen Creek, AZ<br><span class="muted">ZIP 85142</span></div>
-      <div class="choice" data-place="sunnyvale">Sunnyvale, CA</div>
-      <div class="choice" data-place="heber">Heber, AZ</div>
-    </div>
+    <div id="savedList" class="choices" style="margin-top:12px"></div>
 
     <div class="card" style="margin-top:12px">
-      <h2 style="margin:0 0 8px">Or jump to any U.S. ZIP</h2>
+      <h2 style="margin:0 0 8px">Add a place</h2>
       <form id="zipForm" class="zipgrid">
         <input id="zipInput" class="input" inputmode="numeric" pattern="[0-9]*" minlength="5" maxlength="5" placeholder="Enter 5-digit ZIP (e.g., 85142)" />
         <button class="btn" id="zipGo" type="submit">Go</button>
@@ -101,8 +88,9 @@
     <div class="title">
       <h1 id="placeTitle">—</h1>
       <div class="row">
-        <button class="btn" id="backBtn">◀︎ Places</button>
-        <button class="btn" id="setDefaultBtn" title="Make this my default">Set as default</button>
+        <button class="btn" id="backBtn">◀︎ Saved</button>
+        <button class="btn" id="saveBtn" title="Save this location">Save</button>
+        <button class="btn" id="removeBtn" title="Remove from saved" disabled>Remove</button>
         <button class="btn" id="shareBtn" title="Copy link to this location">Share</button>
         <button class="btn" id="refreshBtn">Refresh</button>
       </div>
@@ -168,97 +156,119 @@
 </div>
 
 <script>
-/* -------------------- GLOBALS -------------------- */
-let hourlyPlotState = null, hourlyAll = [], flags = { temp:true, wind:true, pop:false, dew:false };
-let currentPlaceKey = null, currentPlace = null, runningController = null;
+/* =================== STATE =================== */
+let hourlyPlotState=null, hourlyAll=[], flags={temp:true,wind:true,pop:false,dew:false};
+let currentPlaceKey=null, currentPlace=null, runningController=null;
 
-/* -------------------- Static places -------------------- */
-const PLACES = {
-  queencreek: { label: "Queen Creek, AZ · 85142", lat: 33.2425, lon: -111.6343, tz: "America/Phoenix" },
-  sunnyvale:  { label: "Sunnyvale, CA",            lat: 37.3688, lon: -122.0363, tz: "America/Los_Angeles" },
-  heber:      { label: "Heber, AZ",                lat: 34.4206, lon: -110.5696, tz: "America/Phoenix" }
-};
+/* Built-in seeds (look exactly like saved buttons; removable) */
+const SEEDS = [
+  { key:'queencreek', label:'Queen Creek, AZ', lat:33.2425, lon:-111.6343, tz:'America/Phoenix' },
+  { key:'sunnyvale',  label:'Sunnyvale, CA',    lat:37.3688, lon:-122.0363, tz:'America/Los_Angeles' },
+  { key:'heber',      label:'Heber, AZ',        lat:34.4206, lon:-110.5696, tz:'America/Phoenix' }
+];
 
-/* -------------------- Elements -------------------- */
 const els = {
-  home: document.getElementById('view-home'),
-  detail: document.getElementById('view-detail'),
-  placeTitle: document.getElementById('placeTitle'),
-  placeMeta: document.getElementById('placeMeta'),
-  back: document.getElementById('backBtn'),
-  setDefaultBtn: document.getElementById('setDefaultBtn'),
-  shareBtn: document.getElementById('shareBtn'),
-  refresh: document.getElementById('refreshBtn'),
-  temp: document.getElementById('temp'),
-  unit: document.getElementById('unit'),
-  observed: document.getElementById('observed'),
-  station: document.getElementById('station'),
-  days: document.getElementById('days'),
-  canvas: document.getElementById('hourlyChart'),
-  tooltip: document.getElementById('tooltip'),
-  status: document.getElementById('status'),
-  obsApiLink: document.getElementById('obsApiLink'),
-  dailyApiLink: document.getElementById('dailyApiLink'),
-  hourlyApiLink: document.getElementById('hourlyApiLink'),
-  majorTimes: document.getElementById('majorTimes'),
-  minorTimes: document.getElementById('minorTimes'),
-  zipForm: document.getElementById('zipForm'),
-  zipInput: document.getElementById('zipInput'),
-  zipGo: document.getElementById('zipGo'),
-  geoBtn: document.getElementById('geoBtn'),
-  zipMsg: document.getElementById('zipMsg'),
-  defaultBanner: document.getElementById('defaultBanner'),
-  defaultText: document.getElementById('defaultText'),
-  useDefaultBtn: document.getElementById('useDefaultBtn'),
-  clearDefaultBtn: document.getElementById('clearDefaultBtn')
+  home:document.getElementById('view-home'),
+  detail:document.getElementById('view-detail'),
+  savedList:document.getElementById('savedList'),
+  back:document.getElementById('backBtn'),
+  saveBtn:document.getElementById('saveBtn'),
+  removeBtn:document.getElementById('removeBtn'),
+  shareBtn:document.getElementById('shareBtn'),
+  refresh:document.getElementById('refreshBtn'),
+  placeTitle:document.getElementById('placeTitle'),
+  placeMeta:document.getElementById('placeMeta'),
+  temp:document.getElementById('temp'),
+  unit:document.getElementById('unit'),
+  observed:document.getElementById('observed'),
+  station:document.getElementById('station'),
+  days:document.getElementById('days'),
+  canvas:document.getElementById('hourlyChart'),
+  tooltip:document.getElementById('tooltip'),
+  status:document.getElementById('status'),
+  obsApiLink:document.getElementById('obsApiLink'),
+  dailyApiLink:document.getElementById('dailyApiLink'),
+  hourlyApiLink:document.getElementById('hourlyApiLink'),
+  majorTimes:document.getElementById('majorTimes'),
+  minorTimes:document.getElementById('minorTimes'),
+  zipForm:document.getElementById('zipForm'),
+  zipInput:document.getElementById('zipInput'),
+  geoBtn:document.getElementById('geoBtn'),
+  zipMsg:document.getElementById('zipMsg')
 };
 
-/* -------------------- Default storage -------------------- */
-const STORE_KEY = 'wx.defaultPlace';
-function saveDefault(place){
-  const data = { key: currentPlaceKey, label: place.label, lat: place.lat, lon: place.lon, tz: place.tz || '' };
-  localStorage.setItem(STORE_KEY, JSON.stringify(data)); updateDefaultUI(); updateDefaultButton();
-}
-function clearDefault(){ localStorage.removeItem(STORE_KEY); updateDefaultUI(); updateDefaultButton(); }
-function getDefault(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)||'null'); }catch{return null;} }
-function updateDefaultUI(){
-  const d=getDefault();
-  if(d){ els.defaultBanner.style.display=''; els.defaultText.textContent=`Default: ${d.label} • ${Number(d.lat).toFixed(4)}, ${Number(d.lon).toFixed(4)}`; }
-  else { els.defaultBanner.style.display='none'; }
-}
-function updateDefaultButton(){ const d=getDefault(); els.setDefaultBtn.textContent=(d&&d.key===currentPlaceKey)?'Default ✓':'Set as default'; }
+/* =================== SAVED LOCATIONS (localStorage) =================== */
+const SAVED_KEY='wx.savedPlaces.v1';
 
-/* -------------------- Interactions -------------------- */
-document.querySelectorAll('.choice').forEach(el => el.addEventListener('click', ()=>openPlace(el.dataset.place), {passive:true}));
-els.back.addEventListener('click', ()=>{ cancelInFlight(); els.detail.style.display='none'; els.home.style.display=''; history.replaceState({}, '', '#/'); updateDefaultUI(); }, {passive:true});
-els.setDefaultBtn.addEventListener('click', ()=>{ if(currentPlace) saveDefault(currentPlace); }, {passive:true});
+function loadSaved(){
+  try{
+    const raw=localStorage.getItem(SAVED_KEY);
+    if(raw){ return JSON.parse(raw); }
+    // seed first time with built-ins
+    localStorage.setItem(SAVED_KEY, JSON.stringify(SEEDS));
+    return [...SEEDS];
+  }catch{ return [...SEEDS]; }
+}
+function saveSaved(arr){ localStorage.setItem(SAVED_KEY, JSON.stringify(arr)); renderSaved(); }
+
+function renderSaved(){
+  const list=loadSaved();
+  els.savedList.innerHTML='';
+  list.forEach(p=>{
+    const d=document.createElement('div'); d.className='choice'; d.dataset.key=p.key;
+    d.innerHTML=`${p.label}<button class="remove" title="Remove" data-remove="${p.key}">×</button>`;
+    d.addEventListener('click', (e)=>{ if(e.target.dataset.remove) return; openDetail(p.key, p); }, {passive:true});
+    d.querySelector('.remove').addEventListener('click', (e)=>{ e.stopPropagation(); removeSaved(p.key); }, {passive:true});
+    els.savedList.appendChild(d);
+  });
+}
+
+function upsertSaved(place){
+  const list=loadSaved();
+  const id = place.key;
+  if(!list.find(p=>p.key===id)){
+    const item={ key:id, label:place.label, lat:place.lat, lon:place.lon, tz:place.tz || '' };
+    list.push(item); saveSaved(list);
+  }
+  updateSaveButtons();
+}
+function removeSaved(key){
+  const list=loadSaved().filter(p=>p.key!==key);
+  saveSaved(list);
+  if(currentPlaceKey===key){ updateSaveButtons(); }
+}
+
+function isSaved(key){ return loadSaved().some(p=>p.key===key); }
+function updateSaveButtons(){
+  const saved=isSaved(currentPlaceKey);
+  els.saveBtn.textContent = saved ? 'Saved ✓' : 'Save';
+  els.removeBtn.disabled = !saved;
+}
+
+/* =================== NAV / INTERACTIONS =================== */
+els.back.addEventListener('click', ()=>{ cancelInFlight(); els.detail.style.display='none'; els.home.style.display=''; history.replaceState({}, '', '#/'); renderSaved(); }, {passive:true});
+els.saveBtn.addEventListener('click', ()=>{ if(currentPlace && currentPlace.cityState){ upsertSaved({ ...currentPlace, label: currentPlace.cityState }); } }, {passive:true});
+els.removeBtn.addEventListener('click', ()=>{ if(currentPlaceKey) removeSaved(currentPlaceKey); }, {passive:true});
 els.shareBtn.addEventListener('click', ()=>{
   if(!currentPlace) return;
-  const key = encodeURIComponent(currentPlaceKey);
-  const label = encodeURIComponent(currentPlace.label || '');
-  const tz = encodeURIComponent(currentPlace.tz || '');
-  const link = `${location.origin}${location.pathname}#/share?key=${key}&lat=${currentPlace.lat}&lon=${currentPlace.lon}&label=${label}&tz=${tz}`;
+  const key=encodeURIComponent(currentPlaceKey);
+  const label=encodeURIComponent(currentPlace.cityState || currentPlace.label || '');
+  const tz=encodeURIComponent(currentPlace.tz||'');
+  const link=`${location.origin}${location.pathname}#/share?key=${key}&lat=${currentPlace.lat}&lon=${currentPlace.lon}&label=${label}&tz=${tz}`;
   navigator.clipboard?.writeText(link);
   setStatus('Share link copied.','ok');
-}, {passive:true});
+},{passive:true});
 
-document.querySelectorAll('.toggle').forEach(b=>{
-  b.addEventListener('click', ()=>{
-    b.classList.toggle('active');
-    flags[b.dataset.series] = b.classList.contains('active');
-    drawHourly(hourlyAll); // redraw using cached data
-  }, {passive:true});
-});
-
-els.zipForm.addEventListener('submit', async (e) => {
+/* ZIP + GEO entry */
+els.zipForm.addEventListener('submit', async (e)=>{
   e.preventDefault();
   const zip=(els.zipInput.value||'').trim();
   if(!/^\d{5}$/.test(zip)){ els.zipMsg.textContent='Enter a 5-digit U.S. ZIP.'; return; }
   try{
     els.zipMsg.textContent='Looking up ZIP…';
     const info=await lookupZip(zip);
-    const label=`${info.placeName}, ${info.stateAbbr} · ${zip}`;
-    openDynamicPlace({ key:`zip:${zip}`, label, lat:info.lat, lon:info.lon, tz:guessTZ(info.stateAbbr, info.lat, info.lon) });
+    const label=`${info.placeName}, ${info.stateAbbr}`;
+    openDetail(`zip:${zip}`, { key:`zip:${zip}`, label, lat:info.lat, lon:info.lon, tz:guessTZ(info.stateAbbr, info.lat, info.lon) });
   }catch(err){ els.zipMsg.textContent=`ZIP lookup failed: ${err.message}`; }
 });
 els.geoBtn.addEventListener('click', ()=>{
@@ -266,75 +276,49 @@ els.geoBtn.addEventListener('click', ()=>{
   if(!navigator.geolocation){ els.zipMsg.textContent='Geolocation not available in this browser.'; return; }
   navigator.geolocation.getCurrentPosition((pos)=>{
     const { latitude, longitude } = pos.coords;
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    openDynamicPlace({ key:`geo:${latitude.toFixed(4)},${longitude.toFixed(4)}`, label:'Your Location', lat:latitude, lon:longitude, tz });
-  },(err)=>{ els.zipMsg.textContent=`Location error: ${err.message}`; },{ enableHighAccuracy:true, timeout:15000, maximumAge:60000 });
+    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    openDetail(`geo:${latitude.toFixed(4)},${longitude.toFixed(4)}`, { key:`geo:${latitude.toFixed(4)},${longitude.toFixed(4)}`, label:'Your Location', lat:latitude, lon:longitude, tz });
+  }, (err)=>{ els.zipMsg.textContent=`Location error: ${err.message}`; }, { enableHighAccuracy:true, timeout:15000, maximumAge:60000 });
 },{ passive:true });
 
-/* -------------------- ZIP geocoder -------------------- */
+/* =================== HELPERS =================== */
 async function lookupZip(zip){
-  const res=await fetch(`https://api.zippopotam.us/us/${zip}`); if(!res.ok) throw new Error(`No data for ${zip}`);
-  const j=await res.json(); const p=j.places && j.places[0]; if(!p) throw new Error('Malformed ZIP data');
+  const r=await fetch(`https://api.zippopotam.us/us/${zip}`); if(!r.ok) throw new Error(`No data for ${zip}`);
+  const j=await r.json(); const p=j.places?.[0]; if(!p) throw new Error('Malformed ZIP data');
   return { lat:parseFloat(p.latitude), lon:parseFloat(p.longitude), placeName:p['place name'], stateAbbr:p['state abbreviation'] };
 }
 function guessTZ(stateAbbr, lat, lon){
-  const pacific=['CA','WA','OR','NV'], mountain=['AZ','UT','CO','NM','MT','WY','ID'];
+  const pac=['CA','WA','OR','NV'], mtn=['AZ','UT','CO','NM','MT','WY','ID'];
   if(stateAbbr==='AZ') return 'America/Phoenix';
-  if(pacific.includes(stateAbbr)) return 'America/Los_Angeles';
-  if(mountain.includes(stateAbbr)) return 'America/Denver';
+  if(pac.includes(stateAbbr)) return 'America/Los_Angeles';
+  if(mtn.includes(stateAbbr)) return 'America/Denver';
   if(lon<=-112) return 'America/Los_Angeles';
   if(lon<=-97) return 'America/Denver';
   if(lon<=-85) return 'America/Chicago';
   return 'America/New_York';
 }
+function setStatus(text, cls){ els.status.textContent=text; els.status.className='status '+(cls||''); }
 
-/* -------------------- View handling -------------------- */
-function openPlace(key){ openDetail(key, PLACES[key]); }
-function openDynamicPlace(p){ openDetail(p.key, p); }
+/* =================== VIEW / LOAD =================== */
 function openDetail(key, place){
   cancelInFlight(); currentPlaceKey=key; currentPlace=place; hourlyAll=[]; resetDetail(place);
   els.home.style.display='none'; els.detail.style.display=''; history.replaceState({}, '', `#/${encodeURIComponent(key)}`);
-  updateDefaultButton();
+  updateSaveButtons();
   loadAll(place).catch(err=>setStatus(`Load failed: ${err.message}`,'err'));
 }
-function openFromHash(){
-  if(!location.hash.startsWith('#/')) return false;
-  const frag=decodeURIComponent(location.hash.slice(2));
-  if(PLACES[frag]){ openPlace(frag); return true; }
-  if(frag.startsWith('share?')){
-    const params=new URLSearchParams(frag.split('?')[1]||'');
-    const key=params.get('key')||`geo:${params.get('lat')},${params.get('lon')}`;
-    const label=decodeURIComponent(params.get('label')||'Shared place');
-    const tz=params.get('tz')||'UTC';
-    const lat=parseFloat(params.get('lat')); const lon=parseFloat(params.get('lon'));
-    if(!isFinite(lat)||!isFinite(lon)) return false;
-    openDynamicPlace({ key,label,lat,lon,tz }); return true;
-  }
-  return false;
-}
-
-/* -------------------- Reset detail -------------------- */
 function resetDetail(place){
   els.placeTitle.textContent=place.label||'—';
   els.placeMeta.textContent=`${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz||'—'}`;
   els.temp.textContent='—'; els.unit.textContent='°F'; els.observed.textContent='Observed —'; els.station.textContent='—';
   els.days.innerHTML=''; drawHourly([]); els.majorTimes.textContent='—'; els.minorTimes.textContent='—';
   els.obsApiLink.href=els.dailyApiLink.href=els.hourlyApiLink.href='#'; setStatus('Loading…');
-  // reset toggle defaults
-  flags={ temp:true, wind:true, pop:false, dew:false };
-  document.querySelectorAll('.toggle').forEach(b=>{ b.classList.toggle('active', flags[b.dataset.series]); });
+  flags={temp:true,wind:true,pop:false,dew:false};
+  document.querySelectorAll('.toggle').forEach(b=>b.classList.toggle('active', flags[b.dataset.series]));
 }
-
-/* -------------------- Status -------------------- */
-function setStatus(text, cls){ els.status.textContent=text; els.status.className='status '+(cls||''); }
-
-/* -------------------- Fetch helper with cancel -------------------- */
-async function fetchJson(url, accept='application/geo+json', controller){
-  const res=await fetch(url,{ headers:{'Accept':accept}, signal:controller?.signal }); if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`); return res.json();
-}
+async function fetchJson(url, accept='application/geo+json', ctl){ const res=await fetch(url,{headers:{Accept:accept},signal:ctl?.signal}); if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`); return res.json(); }
 function cancelInFlight(){ if(runningController) try{runningController.abort()}catch{} runningController=new AbortController(); return runningController; }
 
-/* -------------------- 7-day cards (High/Low per calendar day) -------------------- */
+/* 7-day HL */
 function dayCardHL(d){
   const div=document.createElement('div'); div.className='day';
   div.innerHTML = `<h3>${d.name}</h3>
@@ -344,7 +328,6 @@ function dayCardHL(d){
   return div;
 }
 function buildHighLow(periods){
-  // periods = NWS forecast periods (day/night entries)
   const byDay=new Map();
   for(const p of periods){
     const dt=new Date(p.startTime);
@@ -358,7 +341,7 @@ function buildHighLow(periods){
   return Array.from(byDay.values()).slice(0,7);
 }
 
-/* -------------------- Canvas chart -------------------- */
+/* Chart + toggles (temp/wind/precip/dew) */
 function setupCanvas(){ const dpr=window.devicePixelRatio||1, cssW=els.canvas.clientWidth||1100, cssH=els.canvas.clientHeight||360;
   els.canvas.width=Math.round(cssW*dpr); els.canvas.height=Math.round(cssH*dpr);
   const ctx=els.canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); return {ctx,W:cssW,H:cssH}; }
@@ -368,16 +351,13 @@ const hourLabel = d => d.toLocaleTimeString([], { hour:'numeric' });
 function drawHourly(points){
   const { ctx, W, H } = setupCanvas(); ctx.clearRect(0,0,W,H);
   const pad={l:54,r:54,t:14,b:34};
-  // Axis setup
   const chartW=W-pad.l-pad.r, chartH=H-pad.t-pad.b;
 
-  // If nothing yet
   if(!points||points.length===0){
     ctx.strokeStyle='rgba(230,238,247,0.12)'; ctx.beginPath(); ctx.moveTo(pad.l,H-pad.b); ctx.lineTo(W-pad.r,H-pad.b); ctx.stroke();
     hourlyPlotState={x:()=>0,points:[]}; return;
   }
 
-  // Determine ranges based on enabled series
   const temps=points.map(p=>p.temp).filter(Number.isFinite);
   const dews=points.map(p=>p.dew).filter(Number.isFinite);
   const leftVals=[...(flags.temp?temps:[]), ...(flags.dew?dews:[])];
@@ -393,86 +373,57 @@ function drawHourly(points){
   const yL=v=>pad.t+(1-(v-lmin)/(lmax-lmin))*chartH;
   const yR=v=>pad.t+(1-(v-rmin)/(rmax-rmin))*chartH;
 
-  // Grid
   ctx.strokeStyle='rgba(230,238,247,0.12)'; ctx.beginPath();
   const tStep=niceStep((lmax-lmin)/6);
   for(let v=Math.ceil(lmin/tStep)*tStep; v<=lmax; v+=tStep){ const yy=yL(v); ctx.moveTo(pad.l,yy); ctx.lineTo(W-pad.r,yy); }
   ctx.stroke();
 
-  // Left labels (°F)
   ctx.fillStyle='#9fb3c8'; ctx.font='12px -apple-system, Segoe UI, Roboto, Helvetica, Arial'; ctx.textAlign='right'; ctx.textBaseline='middle';
   for(let v=Math.ceil(lmin/tStep)*tStep; v<=lmax; v+=tStep){ ctx.fillText(`${Math.round(v)}°F`, pad.l-8, yL(v)); }
-  // Right labels (mph/%)
   const rStep=niceStep((rmax-rmin)/5); ctx.textAlign='left';
-  for(let v=Math.ceil(rmin/rStep)*rStep; v<=rmax; v+=rStep){ ctx.fillText(`${Math.round(v)}${v<=100?'%':' '}`, W-pad.r+8, yR(v)); }
+  for(let v=Math.ceil(rmin/rStep)*rStep; v<=rmax; v+=rStep){ ctx.fillText(`${Math.round(v)}${v<=100?'%':''}`, W-pad.r+8, yR(v)); }
 
-  // Hour labels
   ctx.textAlign='center'; ctx.textBaseline='top';
   for(let i=0;i<points.length;i+=3){ ctx.fillText(hourLabel(points[i].time), x(i), H-pad.b+8); }
 
-  // Draw series
-  function drawSeries(getY, color, accessor){
-    const vals=points.map(accessor);
-    ctx.beginPath();
-    let started=false;
-    for(let i=0;i<points.length;i++){
-      const v=vals[i]; if(!Number.isFinite(v)) continue;
-      const xx=x(i), yy=getY(v);
-      if(!started){ ctx.moveTo(xx,yy); started=true; } else ctx.lineTo(xx,yy);
-    }
-    ctx.strokeStyle=color; ctx.lineWidth=2.25; ctx.setLineDash([]); ctx.stroke();
-  }
-  function drawDashed(getY, color, accessor){
+  function drawSeries(getY, color, accessor, dashed=false){
     const vals=points.map(accessor);
     ctx.beginPath(); let started=false;
-    for(let i=0;i<points.length;i++){
-      const v=vals[i]; if(!Number.isFinite(v)) continue;
-      const xx=x(i), yy=getY(v);
-      if(!started){ ctx.moveTo(xx,yy); started=true; } else ctx.lineTo(xx,yy);
-    }
-    ctx.strokeStyle=color; ctx.setLineDash([4,3]); ctx.lineWidth=2; ctx.stroke(); ctx.setLineDash([]);
+    for(let i=0;i<points.length;i++){ const v=vals[i]; if(!Number.isFinite(v)) continue; const xx=x(i), yy=getY(v); if(!started){ctx.moveTo(xx,yy); started=true;} else ctx.lineTo(xx,yy); }
+    ctx.strokeStyle=color; ctx.lineWidth=2.25; dashed?ctx.setLineDash([4,3]):ctx.setLineDash([]); ctx.stroke(); ctx.setLineDash([]);
   }
-
   if(flags.temp) drawSeries(yL, '#6ee7ff', p=>p.temp);
   if(flags.dew)  drawSeries(yL, getCSS('--dew','#7ae2a5'), p=>p.dew);
-  if(flags.wind) drawDashed(yR, getCSS('--wind','#ffd27a'), p=>p.wind);
-  if(flags.pop)  drawDashed(yR, getCSS('--pop','#9ea7ff'), p=>p.pop);
+  if(flags.wind) drawSeries(yR, getCSS('--wind','#ffd27a'), p=>p.wind, true);
+  if(flags.pop)  drawSeries(yR, getCSS('--pop','#9ea7ff'), p=>p.pop, true);
 
-  // Tooltip hit (nearest by temp curve)
   hourlyPlotState={x, points, yL, yR};
 }
-function getCSS(varName,fallback){ return getComputedStyle(document.documentElement).getPropertyValue(varName)||fallback; }
+function getCSS(name, fallback){ return getComputedStyle(document.documentElement).getPropertyValue(name)||fallback; }
 
-function nearestPoint(px,py){
-  if(!hourlyPlotState) return null;
-  const {x,points,yL}=hourlyPlotState; let best=null,bd=1e9;
-  for(let i=0;i<points.length;i++){
-    const dx=x(i)-px, dy=yL(points[i].temp)-py, d=Math.hypot(dx,dy);
-    if(d<bd){ bd=d; best={i,p:points[i],d}; }
-  }
-  return best;
-}
 (function(){
   const c=els.canvas, tip=els.tooltip;
-  const show=(cx,cy)=>{ const r=c.getBoundingClientRect(); const hit=nearestPoint(cx-r.left, cy-r.top);
-    if(!hit||hit.d>28){ tip.style.display='none'; return; }
-    tip.style.display='block'; const p=hit.p;
-    const parts=[];
-    if(flags.temp && Number.isFinite(p.temp)) parts.push(`${Math.round(p.temp)}°F`);
-    if(flags.wind && Number.isFinite(p.wind)) parts.push(`Wind ${Math.round(p.wind)} mph${p.windDir? ' '+p.windDir:''}`);
-    if(flags.pop  && Number.isFinite(p.pop))  parts.push(`Precip ${Math.round(p.pop)}%`);
-    if(flags.dew  && Number.isFinite(p.dew))  parts.push(`Dew ${Math.round(p.dew)}°F`);
-    tip.textContent=`${hourLabel(p.time)} • ${parts.join(' • ')}`;
-    tip.style.left=`${cx-r.left}px`; tip.style.top=`${cy-r.top}px`;
+  const show=(cx,cy)=>{ const r=c.getBoundingClientRect(); if(!hourlyPlotState){ tip.style.display='none'; return; }
+    const {x,points,yL}=hourlyPlotState; let best=null,bd=1e9;
+    for(let i=0;i<points.length;i++){ const dx=x(i)-(cx-r.left), dy=yL(points[i].temp)-(cy-r.top), d=Math.hypot(dx,dy); if(d<bd){bd=d; best=points[i];} }
+    if(!best||bd>28){ tip.style.display='none'; return; }
+    const parts=[]; if(flags.temp&&Number.isFinite(best.temp)) parts.push(`${Math.round(best.temp)}°F`);
+    if(flags.wind&&Number.isFinite(best.wind)) parts.push(`Wind ${Math.round(best.wind)} mph${best.windDir? ' '+best.windDir:''}`);
+    if(flags.pop&&Number.isFinite(best.pop)) parts.push(`Precip ${Math.round(best.pop)}%`);
+    if(flags.dew&&Number.isFinite(best.dew)) parts.push(`Dew ${Math.round(best.dew)}°F`);
+    tip.textContent=`${hourLabel(best.time)} • ${parts.join(' • ')}`;
+    tip.style.display='block'; tip.style.left=`${cx-r.left}px`; tip.style.top=`${cy-r.top}px`;
   };
   c.addEventListener('mousemove',e=>show(e.clientX,e.clientY),{passive:true});
   c.addEventListener('mouseleave',()=>tip.style.display='none',{passive:true});
   c.addEventListener('touchstart',e=>{const t=e.changedTouches[0];show(t.clientX,t.clientY);},{passive:true});
   c.addEventListener('touchmove',e=>{const t=e.changedTouches[0];show(t.clientX,t.clientY);},{passive:true});
-  window.addEventListener('resize',()=>{ if(hourlyPlotState) drawHourly(hourlyPlotState.points); },{passive:true});
+  document.querySelectorAll('.toggle').forEach(b=>{
+    b.addEventListener('click', ()=>{ b.classList.toggle('active'); flags[b.dataset.series]=b.classList.contains('active'); drawHourly(hourlyAll); }, {passive:true});
+  });
 })();
 
-/* -------------------- Solunar -------------------- */
+/* Solunar (local) */
 function toDateInTZ(tz, d=new Date()){ const p=new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d).reduce((a,c)=>{a[c.type]=c.value;return a;},{}); return new Date(`${p.year}-${p.month}-${p.day}T00:00:00`); }
 function fmtHM(d, tz){ return new Intl.DateTimeFormat([], { timeZone: tz, hour:'2-digit', minute:'2-digit' }).format(d); }
 const PI=Math.PI, sin=Math.sin, cos=Math.cos, asin=Math.asin, atan2=Math.atan2;
@@ -483,17 +434,25 @@ function getMoonTimes(date0,latDeg,lonDeg){const lat=rad(latDeg),lon=rad(lonDeg)
 function findTransit(date0,latDeg,lonDeg){const lat=rad(latDeg),lon=rad(lonDeg);const start=toDateInTZ('UTC',date0);let ba=-1e9,bt=new Date(start);for(let m=0;m<=1440;m+=5){const t=new Date(+start+m*60000);const a=moonPos(t,lat,lon).alt;if(a>ba){ba=a;bt=t}}return bt}
 function solunarWindows(date0,lat,lon,tz){const times=getMoonTimes(date0,lat,lon);const transit=findTransit(date0,lat,lon);const underfoot=new Date(+transit+12*3600*1000);const major1=[new Date(+transit-3600*1000),new Date(+transit+3600*1000)],major2=[new Date(+underfoot-3600*1000),new Date(+underfoot+3600*1000)];const minor=[];if(times.rise)minor.push([new Date(+times.rise-30*60*1000),new Date(+times.rise+30*60*1000)]);if(times.set)minor.push([new Date(+times.set-30*60*1000),new Date(+times.set+30*60*1000)]);const fmt=r=>`${fmtHM(r[0],tz)}–${fmtHM(r[1],tz)}`;return{majors:`${fmt(major1)} · ${fmt(major2)}`,minors:minor.length?minor.map(fmt).join(' · '):'—'}}
 
-/* -------------------- Utilities -------------------- */
+/* Utilities */
 function parseWindMph(str){ const m=(str&&str.match(/\d+/g))?str.match(/\d+/g).map(n=>parseInt(n,10)):[]; return m.length?Math.max(...m):NaN; }
 
-/* -------------------- Main load -------------------- */
+/* Loader */
 async function loadAll(place){
   const ctl=cancelInFlight(); setStatus('Loading…'); els.refresh.disabled=true;
   try{
     const points=await fetchJson(`https://api.weather.gov/points/${place.lat},${place.lon}`,'application/geo+json',ctl);
     const props=points.properties||{}; const rel=props.relativeLocation?.properties;
-    if(rel?.city&&rel?.state){ els.placeTitle.textContent=place.label&&place.label!=='Your Location'?place.label:`${rel.city}, ${rel.state}`; els.placeMeta.textContent=`${rel.city}, ${rel.state} • ${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`; }
-    else { els.placeTitle.textContent=place.label||'—'; els.placeMeta.textContent=`${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`; }
+    if(rel?.city&&rel?.state){
+      currentPlace.cityState = `${rel.city}, ${rel.state}`;
+      els.placeTitle.textContent = currentPlace.cityState;
+      els.placeMeta.textContent = `${rel.city}, ${rel.state} • ${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`;
+    } else {
+      currentPlace.cityState = place.label || '—';
+      els.placeTitle.textContent = place.label || '—';
+      els.placeMeta.textContent = `${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`;
+    }
+    updateSaveButtons();
 
     const stations=await fetchJson(props.observationStations,'application/geo+json',ctl);
     const s0=stations.features?.[0]; const stationId=s0?.properties?.stationIdentifier || s0?.id?.split('/').pop();
@@ -507,16 +466,13 @@ async function loadAll(place){
     if(tempC!=null){ els.temp.textContent=`${Math.round((tempC*9/5)+32)}`; els.unit.textContent='°F'; }
     els.observed.textContent = lp.timestamp ? new Date(lp.timestamp).toLocaleString() : 'Observed —';
 
-    // Daily high/low
     els.dailyApiLink.href=props.forecast||'#'; els.days.innerHTML='';
     if(props.forecast){
       const daily=await fetchJson(props.forecast,'application/geo+json',ctl);
       const per=daily.properties?.periods||[];
-      const days=buildHighLow(per);
-      days.forEach(d=>els.days.appendChild(dayCardHL(d)));
+      buildHighLow(per).forEach(d=>els.days.appendChild(dayCardHL(d)));
     }
 
-    // Hourly (preload all fields)
     els.hourlyApiLink.href=props.forecastHourly||'#';
     hourlyAll=[];
     if(props.forecastHourly){
@@ -533,7 +489,6 @@ async function loadAll(place){
       drawHourly(hourlyAll);
     } else { drawHourly([]); }
 
-    // Solunar
     const todayLocal=toDateInTZ(place.tz,new Date()); const {majors,minors}=solunarWindows(todayLocal,place.lat,place.lon,place.tz);
     els.majorTimes.textContent=majors; els.minorTimes.textContent=minors;
 
@@ -543,11 +498,30 @@ async function loadAll(place){
 }
 els.refresh.addEventListener('click', ()=> currentPlace && loadAll(currentPlace), {passive:true});
 
-/* -------------------- Deep-link + default auto-open -------------------- */
+/* Deep-link + initial render */
+function openFromHash(){
+  if(!location.hash.startsWith('#/')) return false;
+  const frag=decodeURIComponent(location.hash.slice(2));
+  if(frag.startsWith('share?')){
+    const p=new URLSearchParams(frag.split('?')[1]||'');
+    const key=p.get('key')||`geo:${p.get('lat')},${p.get('lon')}`;
+    const label=decodeURIComponent(p.get('label')||'Shared place');
+    const tz=p.get('tz')||'UTC';
+    const lat=parseFloat(p.get('lat')); const lon=parseFloat(p.get('lon'));
+    if(!isFinite(lat)||!isFinite(lon)) return false;
+    openDetail(key,{key,label,lat,lon,tz}); return true;
+  }
+  // If hash matches a saved key, open it
+  const hit=loadSaved().find(x=>x.key===frag);
+  if(hit){ openDetail(hit.key, hit); return true; }
+  return false;
+}
+
 window.addEventListener('DOMContentLoaded', ()=>{
-  updateDefaultUI();
-  if (openFromHash()) return;
-  const d=getDefault(); if(d) openDynamicPlace({ key:d.key, label:d.label, lat:d.lat, lon:d.lon, tz:d.tz || guessTZ('', d.lat, d.lon) });
+  renderSaved();
+  if (!openFromHash()) {
+    // no auto-open; user taps a saved button or enters a ZIP
+  }
 });
 </script>
 </body>
