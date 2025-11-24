@@ -35,11 +35,12 @@
     .cc .cond{font-size:16px}
     .kv{font-size:14px}
     .kv strong{display:block;font-size:12px;color:var(--muted);font-weight:700}
-    .day{display:flex;flex-direction:column;gap:6px}
+    .day{display:flex;flex-direction:column;gap:6px;cursor:pointer;transition:background .15s,border-color .15s,transform .1s}
     .day h3{margin:0 0 2px;font-size:14px}
     .day .t{font-size:18px;font-weight:700}
     .day .w{font-size:12px;color:var(--muted)}
     .day .ico{width:48px;height:48px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);object-fit:cover}
+    .day:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.25);transform:translateY(-1px)}
     .chart-wrap{position:relative;width:100%;height:360px;touch-action:manipulation}
     canvas{width:100%;height:100%;display:block;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
     .tooltip{position:absolute;pointer-events:none;background:#0b1220;color:#e6eef7;border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:6px 8px;font-size:12px;transform:translate(-50%,-110%);white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,.35);display:none}
@@ -50,9 +51,11 @@
     .toggles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
     .toggle{border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04);padding:8px 10px;border-radius:10px;cursor:pointer;font-weight:700}
     .toggle.active{outline:2px solid rgba(110,231,255,.45)}
-    .zipgrid{display:grid;grid-template-columns:1fr auto;grid-template-areas:"zip go" "geo geo";gap:10px;margin-top:12px}
+    .zipgrid{display:grid;grid-template-columns:1.4fr .8fr;grid-template-areas:"zip go" "city state" "geo geo";gap:10px;margin-top:12px}
     #zipInput{grid-area:zip}
     #zipGo{grid-area:go}
+    #cityInput{grid-area:city}
+    #stateInput{grid-area:state}
     #geoBtn{grid-area:geo;width:100%}
     .tideGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
     .tideDay{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:10px}
@@ -60,6 +63,7 @@
     .tideTbl{width:100%;border-collapse:collapse;font-size:13px}
     .tideTbl td{padding:4px 6px;border-top:1px solid rgba(255,255,255,.08)}
     .hi{color:#8ee58e} .lo{color:#f7a8b8}
+
     @media (max-width:900px){
       .choices{grid-template-columns:1fr}
       .grid-3{grid-template-columns:1fr}
@@ -67,6 +71,9 @@
       .tideGrid{grid-template-columns:1fr 1fr}
       .chart-wrap{height:300px}
       .temp{font-size:40px}
+      .cc-row{flex-direction:column;align-items:flex-start}
+      .grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .cc{width:100%}
     }
   </style>
 </head>
@@ -81,11 +88,13 @@
     <div class="card" style="margin-top:12px">
       <h2 style="margin:0 0 8px">Add a place</h2>
       <form id="zipForm" class="zipgrid">
-        <input id="zipInput" class="input" inputmode="numeric" pattern="[0-9]*" minlength="5" maxlength="5" placeholder="Enter 5-digit ZIP (e.g., 85142)" />
+        <input id="zipInput" class="input" inputmode="numeric" pattern="[0-9]*" minlength="5" maxlength="5" placeholder="ZIP (e.g., 85142)" />
         <button class="btn" id="zipGo" type="submit">Go</button>
+        <input id="cityInput" class="input" placeholder="City (e.g., Queen Creek)" />
+        <input id="stateInput" class="input" placeholder="State (e.g., AZ)" maxlength="2" />
         <button class="btn" type="button" id="geoBtn" title="Use your phone location">Your location</button>
       </form>
-      <div id="zipMsg" class="muted" style="margin-top:8px;font-size:13px">ZIP uses Zippopotam.us; “Your location” uses your device GPS.</div>
+      <div id="zipMsg" class="muted" style="margin-top:8px;font-size:13px">Enter a ZIP or city + state. ZIP + city/state use Zippopotam.us; “Your location” uses your device GPS.</div>
     </div>
     <div class="muted" style="margin-top:10px">
       Weather: National Weather Service (api.weather.gov). Tides: NOAA CO-OPS (api.tidesandcurrents.noaa.gov). Solunar: computed locally.
@@ -107,7 +116,7 @@
 
     <!-- Current conditions -->
     <div class="card" style="margin-top:8px">
-      <div class="row" style="align-items:flex-start;gap:16px">
+      <div class="row cc-row" style="align-items:flex-start;gap:16px">
         <div class="cc">
           <img id="condIcon" alt="Condition icon" src="" />
           <div>
@@ -140,10 +149,19 @@
       </div>
     </div>
 
-    <!-- 7-DAY -->
+    <!-- 10-DAY -->
     <div class="card" style="margin-top:12px">
-      <h2 style="margin:0 0 8px">7-Day Forecast</h2>
+      <h2 style="margin:0 0 8px">10-Day Forecast</h2>
       <div class="grid-7" id="days"></div>
+    </div>
+
+    <!-- Day details -->
+    <div id="dayDetailCard" class="card" style="margin-top:12px; display:none">
+      <div class="title">
+        <h2 id="dayDetailTitle">Day details</h2>
+        <button class="btn" type="button" id="dayDetailClose">Close</button>
+      </div>
+      <div id="dayDetailBody" class="muted" style="margin-top:8px;font-size:14px">—</div>
     </div>
 
     <!-- HOURLY GRAPH -->
@@ -193,6 +211,7 @@
 let hourlyPlotState=null, hourlyAll=[], flags={temp:true,wind:true,pop:false,dew:false};
 let currentPlaceKey=null, currentPlace=null, runningController=null;
 let latestDailyIconUrl = ''; // fallback for current icon if obs lacks one
+let dailyByKey = {}; // keyed by YYYY-MM-DD for day detail view
 
 /* Seeds (look like saved; removable) */
 const SEEDS = [
@@ -227,6 +246,8 @@ const els = {
   minorTimes:document.getElementById('minorTimes'),
   zipForm:document.getElementById('zipForm'),
   zipInput:document.getElementById('zipInput'),
+  cityInput:document.getElementById('cityInput'),
+  stateInput:document.getElementById('stateInput'),
   geoBtn:document.getElementById('geoBtn'),
   zipMsg:document.getElementById('zipMsg'),
   tidesCard:document.getElementById('tidesCard'),
@@ -237,7 +258,11 @@ const els = {
   ccHumidity:document.getElementById('ccHumidity'),
   ccWind:document.getElementById('ccWind'),
   ccDew:document.getElementById('ccDew'),
-  ccChill:document.getElementById('ccChill')
+  ccChill:document.getElementById('ccChill'),
+  dayDetailCard:document.getElementById('dayDetailCard'),
+  dayDetailTitle:document.getElementById('dayDetailTitle'),
+  dayDetailBody:document.getElementById('dayDetailBody'),
+  dayDetailClose:document.getElementById('dayDetailClose')
 };
 
 /* =================== SAVED LOCATIONS =================== */
@@ -288,18 +313,37 @@ els.shareBtn.addEventListener('click', ()=>{
   setStatus('Share link copied.','ok');
 },{passive:true});
 
-/* ZIP + GEO entry */
+/* ZIP + CITY/STATE + GEO entry */
 els.zipForm.addEventListener('submit', async (e)=>{
   e.preventDefault();
   const zip=(els.zipInput.value||'').trim();
-  if(!/^\d{5}$/.test(zip)){ els.zipMsg.textContent='Enter a 5-digit U.S. ZIP.'; return; }
-  try{
-    els.zipMsg.textContent='Looking up ZIP…';
-    const info=await lookupZip(zip);
-    const label=`${info.placeName}, ${info.stateAbbr}`;
-    openDetail(`zip:${zip}`, { key:`zip:${zip}`, label, lat:info.lat, lon:info.lon, tz:guessTZ(info.stateAbbr, info.lat, info.lon) });
-  }catch(err){ els.zipMsg.textContent=`ZIP lookup failed: ${err.message}`; }
+  const city=(els.cityInput.value||'').trim();
+  const state=(els.stateInput.value||'').trim().toUpperCase();
+
+  if(zip){
+    if(!/^\d{5}$/.test(zip)){ els.zipMsg.textContent='Enter a valid 5-digit U.S. ZIP.'; return; }
+    try{
+      els.zipMsg.textContent='Looking up ZIP…';
+      const info=await lookupZip(zip);
+      const label=`${info.placeName}, ${info.stateAbbr}`;
+      openDetail(`zip:${zip}`, { key:`zip:${zip}`, label, lat:info.lat, lon:info.lon, tz:guessTZ(info.stateAbbr, info.lat, info.lon) });
+    }catch(err){ els.zipMsg.textContent=`ZIP lookup failed: ${err.message}`; }
+    return;
+  }
+
+  if(city && state){
+    try{
+      els.zipMsg.textContent='Looking up city + state…';
+      const info=await lookupCityState(city, state);
+      const label=`${info.placeName}, ${info.stateAbbr}`;
+      openDetail(`city:${state}:${city.toLowerCase()}`, { key:`city:${state}:${city.toLowerCase()}`, label, lat:info.lat, lon:info.lon, tz:guessTZ(info.stateAbbr, info.lat, info.lon) });
+    }catch(err){ els.zipMsg.textContent=`City lookup failed: ${err.message}`; }
+    return;
+  }
+
+  els.zipMsg.textContent='Enter a ZIP or city + 2-letter state.';
 });
+
 els.geoBtn.addEventListener('click', ()=>{
   els.zipMsg.textContent='Requesting your location…';
   if(!navigator.geolocation){ els.zipMsg.textContent='Geolocation not available in this browser.'; return; }
@@ -315,6 +359,18 @@ async function lookupZip(zip){
   const r=await fetch(`https://api.zippopotam.us/us/${zip}`); if(!r.ok) throw new Error(`No data for ${zip}`);
   const j=await r.json(); const p=j.places?.[0]; if(!p) throw new Error('Malformed ZIP data');
   return { lat:parseFloat(p.latitude), lon:parseFloat(p.longitude), placeName:p['place name'], stateAbbr:p['state abbreviation'] };
+}
+async function lookupCityState(city, stateAbbr){
+  const r=await fetch(`https://api.zippopotam.us/us/${encodeURIComponent(stateAbbr.toLowerCase())}/${encodeURIComponent(city.toLowerCase())}`);
+  if(!r.ok) throw new Error(`No data for ${city}, ${stateAbbr}`);
+  const j=await r.json();
+  const p=j.places?.[0]; if(!p) throw new Error('Malformed city data');
+  return {
+    lat:parseFloat(p.latitude),
+    lon:parseFloat(p.longitude),
+    placeName:p['place name'],
+    stateAbbr:p['state abbreviation'] || stateAbbr.toUpperCase()
+  };
 }
 function guessTZ(stateAbbr, lat, lon){
   const pac=['CA','WA','OR','NV'], mtn=['AZ','UT','CO','NM','MT','WY','ID'];
@@ -337,6 +393,7 @@ function openDetail(key, place){
 }
 function resetDetail(place){
   latestDailyIconUrl='';
+  dailyByKey={};
   els.placeTitle.textContent=place.label||'—';
   els.placeMeta.textContent=`${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz||'—'}`;
   els.temp.textContent='—'; els.unit.textContent='°F'; els.observed.textContent='Observed —';
@@ -345,13 +402,14 @@ function resetDetail(place){
   els.days.innerHTML=''; drawHourly([]); els.majorTimes.textContent='—'; els.minorTimes.textContent='—';
   els.obsApiLink.href=els.dailyApiLink.href=els.hourlyApiLink.href='#'; setStatus('Loading…');
   els.tidesCard.style.display='none'; els.tideGrid.innerHTML=''; els.tideStationLbl.textContent='—';
+  els.dayDetailCard.style.display='none'; els.dayDetailBody.innerHTML='—';
   flags={temp:true,wind:true,pop:false,dew:false};
   document.querySelectorAll('.toggle').forEach(b=>b.classList.toggle('active', flags[b.dataset.series]));
 }
 async function fetchJson(url, accept='application/geo+json', ctl){ const res=await fetch(url,{headers:{Accept:accept},signal:ctl?.signal}); if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`); return res.json(); }
 function cancelInFlight(){ if(runningController) try{runningController.abort()}catch{} runningController=new AbortController(); return runningController; }
 
-/* =================== 7-day HL + icons =================== */
+/* =================== 10-day HL + icons =================== */
 function dayCardHL(d){
   const div=document.createElement('div'); div.className='day';
   div.innerHTML = `<h3>${d.name}</h3>
@@ -364,8 +422,16 @@ function buildHighLow(periods){
   const byDay=new Map();
   for(const p of periods){
     const dt=new Date(p.startTime);
-    const key=dt.getFullYear()+'-'+(dt.getMonth()+1)+'-'+dt.getDate();
-    const rec=byDay.get(key)||{ name: dt.toLocaleDateString(undefined,{weekday:'short'}), high:null, low:null, icon:'', short:'' };
+    const key=dt.toISOString().slice(0,10); // YYYY-MM-DD
+    const rec=byDay.get(key)||{
+      key,
+      name: dt.toLocaleDateString(undefined,{weekday:'short'}),
+      high:null,
+      low:null,
+      icon:'',
+      short:'',
+      periods:[]
+    };
     const t=p.temperatureUnit==='F'?p.temperature:Math.round((p.temperature*9/5)+32);
     if(p.isDaytime){
       rec.high = rec.high==null? t : Math.max(rec.high,t);
@@ -376,12 +442,48 @@ function buildHighLow(periods){
       rec.short = rec.short || p.shortForecast || '';
       if(!rec.icon) rec.icon = p.icon || '';
     }
+    rec.periods.push(p);
     byDay.set(key, rec);
   }
-  const arr = Array.from(byDay.values()).slice(0,7);
+  const arr = Array.from(byDay.values()).slice(0,10);
   if(arr[0]?.icon) latestDailyIconUrl = arr[0].icon; // for current icon fallback
-  return arr;
+  const byKey={};
+  arr.forEach(d=>{ byKey[d.key]=d; });
+  return {arr, byKey};
 }
+
+/* =================== Day detail =================== */
+function openDayDetail(dayKey){
+  const rec = dailyByKey[dayKey];
+  if(!rec) return;
+  els.dayDetailTitle.textContent = `${rec.name} details`;
+
+  const parts = [];
+  (rec.periods||[]).forEach(p=>{
+    const t = new Date(p.startTime);
+    const whenStr = t.toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+    const temp = (p.temperature!=null) ? `${p.temperature}°${p.temperatureUnit||'F'}` : '—';
+    const wind = p.windSpeed || '—';
+    const pop = p.probabilityOfPrecipitation && typeof p.probabilityOfPrecipitation.value==='number'
+      ? `${p.probabilityOfPrecipitation.value}%`
+      : '—';
+    const detail = p.detailedForecast || p.shortForecast || '';
+    parts.push(`<div class="pill" style="margin-bottom:8px">
+      <div><strong>${p.name || rec.name}</strong> • ${whenStr}</div>
+      <div class="muted" style="margin-top:4px">${detail}</div>
+      <div class="muted" style="margin-top:4px;font-size:13px">Temp: ${temp} · Wind: ${wind} · Precip: ${pop}</div>
+    </div>`);
+  });
+
+  els.dayDetailBody.innerHTML = parts.join('') || '<div class="muted">No additional details for this day.</div>';
+  els.dayDetailCard.style.display='';
+  els.dayDetailCard.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+els.dayDetailClose.addEventListener('click', ()=>{
+  els.dayDetailCard.style.display='none';
+  els.dayDetailBody.innerHTML='—';
+}, {passive:true});
 
 /* =================== Chart + toggles (Temp/Wind/Precip/Dew) =================== */
 function setupCanvas(){ const dpr=window.devicePixelRatio||1, cssW=els.canvas.clientWidth||1100, cssH=els.canvas.clientHeight||360;
@@ -470,7 +572,7 @@ function toDateInTZ(tz, d=new Date()){ const p=new Intl.DateTimeFormat('en-CA',{
 function fmtHM(d, tz){ return new Intl.DateTimeFormat([], { timeZone: tz, hour:'2-digit', minute:'2-digit' }).format(d); }
 const PI=Math.PI, sin=Math.sin, cos=Math.cos, asin=Math.asin, atan2=Math.atan2;
 function rad(x){return x*PI/180} function jdFromDate(date){return date/86400000+2440587.5} function lst(jd,lon){const d=jd-2451545.0;return(((280.46061837+360.98564736629*d)%360)*PI/180)+lon}
-function moonCoords(d){const L=rad((218.316+13.176396*d)%360),M=rad((134.963+13.064993*d)%360),F=rad((93.272+13.22935*d)%360),e=rad(23.4397);const l=L+rad(6.289)*sin(M);const b=rad(5.128)*sin(F);return{ra:atan2(Math.sin(l)*Math.cos(e)-Math.tan(b)*Math.sin(e),Math.cos(l)),dec:asin(Math.sin(b)*Math.cos(e)+Math.cos(b)*Math.sin(e)*Math.sin(l))}}
+function moonCoords(d){const L=rad((218.316+13.176396*d)%360),M=rad((134.963+13.064993*d)%360),F=rad((93.272+13.22935*d)%360),e=rad(23.4397);const l=L+rad(6.289)*sin(M);const b=rad(5.128)*sin(F);return{ra:atan2(Math.sin(l)*Math.cos(e)-Math.tan(b)*Math.sin(e),Math.cos(l)),dec:asin(Math.sin(b)*Math.cos(e)+Math.cos(b)*Math.cos(e)*Math.sin(l))}}
 function moonPos(date,lat,lon){const jd=jdFromDate(date),d=jd-2451545.0,mc=moonCoords(d),H=lst(jd,lon)-mc.ra;const alt=asin(Math.sin(lat)*Math.sin(mc.dec)+Math.cos(lat)*Math.cos(mc.dec)*Math.cos(H));return{alt}}
 function getMoonTimes(date0,latDeg,lonDeg){const lat=rad(latDeg),lon=rad(lonDeg);const start=toDateInTZ('UTC',date0);const r={rise:null,set:null};let pa=null,pt=null;for(let m=0;m<=1440;m+=10){const t=new Date(+start+m*60000);const a=moonPos(t,lat,lon).alt-rad(0.125);if(pa!==null){if(pa<=0&&a>0&&!r.rise)r.rise=new Date((+pt+ +t)/2);if(pa>=0&&a<0&&!r.set)r.set=new Date((+pt+ +t)/2);}pa=a;pt=t}return r}
 function findTransit(date0,latDeg,lonDeg){const lat=rad(latDeg),lon=rad(lonDeg);const start=toDateInTZ('UTC',date0);let ba=-1e9,bt=new Date(start);for(let m=0;m<=1440;m+=5){const t=new Date(+start+m*60000);const a=moonPos(t,lat,lon).alt;if(a>ba){ba=a;bt=t}}return bt}
@@ -533,12 +635,18 @@ async function loadAll(place){
     const chill = Number.isFinite(tempF)&&Number.isFinite(windMph) ? fWindChill(tempF, windMph) : null;
     els.ccChill.textContent = (chill!=null) ? `${chill}°F` : '—';
 
-    // Daily forecast (for 7-day + icon fallback)
+    // Daily forecast (for 10-day + icon fallback)
     els.dailyApiLink.href=props.forecast||'#'; els.days.innerHTML='';
+    dailyByKey={};
     if(props.forecast){
       const daily=await fetchJson(props.forecast,'application/geo+json',ctl);
-      const arr = buildHighLow(daily.properties?.periods||[]);
-      arr.forEach(d=>els.days.appendChild(dayCardHL(d)));
+      const res = buildHighLow(daily.properties?.periods||[]);
+      dailyByKey = res.byKey;
+      res.arr.forEach(d=>{
+        const card = dayCardHL(d);
+        card.addEventListener('click', ()=>openDayDetail(d.key));
+        els.days.appendChild(card);
+      });
     }
 
     // Choose icon for current: prefer obs icon if present (not always), else first daily icon we cached
