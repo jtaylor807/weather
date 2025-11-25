@@ -3,7 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <title>Weather + Solunar • Saved Locations + Tides</title>
+
+  <!-- iOS Safari standalone web app -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Weather + Solunar">
+
+  <!-- Icon used when added to Home Screen (adjust path/size as needed) -->
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+  <!-- Viewport for mobile (unchanged) -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
   <style>
     :root { color-scheme: dark; --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3; --wind:#ffd27a; --pop:#9ea7ff; --dew:#7ae2a5; }
     html,body{height:100%;margin:0;background:var(--bg);color:#e6eef7;font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji",sans-serif;-webkit-text-size-adjust:100%}
@@ -97,7 +108,7 @@
       <div id="zipMsg" class="muted" style="margin-top:8px;font-size:13px">Enter a ZIP or city + state. ZIP + city/state use Zippopotam.us; “Your location” uses your device GPS.</div>
     </div>
     <div class="muted" style="margin-top:10px">
-      Weather: National Weather Service (api.weather.gov). Tides: NOAA CO-OPS (api.tidesandcurrents.noaa.gov). Solunar: computed locally.
+      Weather: National Weather Service (api.weather.gov). Tides: NOAA CO-OPS (api.tidesandcurrents.noaa.gov). Solunar: Solunar.org API.
     </div>
   </div>
 
@@ -199,7 +210,7 @@
         <div class="pill"><div><strong>Major</strong></div><div id="majorTimes" class="muted">—</div></div>
         <div class="pill"><div><strong>Minor</strong></div><div id="minorTimes" class="muted">—</div></div>
       </div>
-      <div class="muted" style="margin-top:8px;font-size:13px">Local times for the selected place’s time zone.</div>
+      <div class="muted" style="margin-top:8px;font-size:13px">Local times from Solunar.org for the selected place’s time zone.</div>
     </div>
 
     <div class="status" id="status">—</div>
@@ -525,7 +536,7 @@ function drawHourly(points){
   ctx.fillStyle='#9fb3c8'; ctx.font='12px -apple-system, Segoe UI, Roboto, Helvetica, Arial'; ctx.textAlign='right'; ctx.textBaseline='middle';
   for(let v=Math.ceil(lmin/tStep)*tStep; v<=lmax; v+=tStep){ ctx.fillText(`${Math.round(v)}°F`, pad.l-8, yL(v)); }
   const rStep=niceStep((rmax-rmin)/5); ctx.textAlign='left';
-  for(let v=Math.ceil(rmin/rStep)*rStep; v<=rmax; v+=rStep){ ctx.fillText(`${Math.round(v)}`, W-pad.r+8, yR(v)); }
+  for(let v=Math.ceil(rmin/rStep)*tStep; v<=rmax; v+=rStep){ ctx.fillText(`${Math.round(v)}`, W-pad.r+8, yR(v)); }
 
   ctx.textAlign='center'; ctx.textBaseline='top';
   for(let i=0;i<points.length;i+=3){ ctx.fillText(hourLabel(points[i].time), x(i), H-pad.b+8); }
@@ -567,16 +578,62 @@ function getCSS(name, fallback){ return getComputedStyle(document.documentElemen
   });
 })();
 
-/* =================== Solunar =================== */
-function toDateInTZ(tz, d=new Date()){ const p=new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d).reduce((a,c)=>{a[c.type]=c.value;return a;},{}); return new Date(`${p.year}-${p.month}-${p.day}T00:00:00`); }
-function fmtHM(d, tz){ return new Intl.DateTimeFormat([], { timeZone: tz, hour:'2-digit', minute:'2-digit' }).format(d); }
-const PI=Math.PI, sin=Math.sin, cos=Math.cos, asin=Math.asin, atan2=Math.atan2;
-function rad(x){return x*PI/180} function jdFromDate(date){return date/86400000+2440587.5} function lst(jd,lon){const d=jd-2451545.0;return(((280.46061837+360.98564736629*d)%360)*PI/180)+lon}
-function moonCoords(d){const L=rad((218.316+13.176396*d)%360),M=rad((134.963+13.064993*d)%360),F=rad((93.272+13.22935*d)%360),e=rad(23.4397);const l=L+rad(6.289)*sin(M);const b=rad(5.128)*sin(F);return{ra:atan2(Math.sin(l)*Math.cos(e)-Math.tan(b)*Math.sin(e),Math.cos(l)),dec:asin(Math.sin(b)*Math.cos(e)+Math.cos(b)*Math.cos(e)*Math.sin(l))}}
-function moonPos(date,lat,lon){const jd=jdFromDate(date),d=jd-2451545.0,mc=moonCoords(d),H=lst(jd,lon)-mc.ra;const alt=asin(Math.sin(lat)*Math.sin(mc.dec)+Math.cos(lat)*Math.cos(mc.dec)*Math.cos(H));return{alt}}
-function getMoonTimes(date0,latDeg,lonDeg){const lat=rad(latDeg),lon=rad(lonDeg);const start=toDateInTZ('UTC',date0);const r={rise:null,set:null};let pa=null,pt=null;for(let m=0;m<=1440;m+=10){const t=new Date(+start+m*60000);const a=moonPos(t,lat,lon).alt-rad(0.125);if(pa!==null){if(pa<=0&&a>0&&!r.rise)r.rise=new Date((+pt+ +t)/2);if(pa>=0&&a<0&&!r.set)r.set=new Date((+pt+ +t)/2);}pa=a;pt=t}return r}
-function findTransit(date0,latDeg,lonDeg){const lat=rad(latDeg),lon=rad(lonDeg);const start=toDateInTZ('UTC',date0);let ba=-1e9,bt=new Date(start);for(let m=0;m<=1440;m+=5){const t=new Date(+start+m*60000);const a=moonPos(t,lat,lon).alt;if(a>ba){ba=a;bt=t}}return bt}
-function solunarWindows(date0,lat,lon,tz){const times=getMoonTimes(date0,lat,lon);const transit=findTransit(date0,lat,lon);const underfoot=new Date(+transit+12*3600*1000);const major1=[new Date(+transit-3600*1000),new Date(+transit+3600*1000)],major2=[new Date(+underfoot-3600*1000),new Date(+underfoot+3600*1000)];const minor=[];if(times.rise)minor.push([new Date(+times.rise-30*60*1000),new Date(+times.rise+30*60*1000)]);if(times.set)minor.push([new Date(+times.set-30*60*1000),new Date(+times.set+30*60*1000)]);const fmt=r=>`${fmtHM(r[0],tz)}–${fmtHM(r[1],tz)}`;return{majors:`${fmt(major1)} · ${fmt(major2)}`,minors:minor.length?minor.map(fmt).join(' · '):'—'}}
+/* =================== Solunar via solunar.org API =================== */
+function solunarDateYMD(tz, date=new Date()){
+  const parts = new Intl.DateTimeFormat('en-CA',{
+    timeZone:tz,
+    year:'numeric',
+    month:'2-digit',
+    day:'2-digit'
+  }).formatToParts(date).reduce((acc,p)=>{acc[p.type]=p.value;return acc;}, {});
+  return `${parts.year}${parts.month}${parts.day}`; // yyyymmdd
+}
+
+function tzOffsetHours(tz, date=new Date()){
+  try{
+    const fmt = new Intl.DateTimeFormat('en-US',{
+      timeZone:tz,
+      year:'numeric',
+      month:'2-digit',
+      day:'2-digit',
+      hour:'2-digit',
+      minute:'2-digit',
+      second:'2-digit',
+      hour12:false
+    });
+    const parts = fmt.formatToParts(date).reduce((acc,p)=>{acc[p.type]=p.value;return acc;}, {});
+    const asUTC = Date.UTC(+parts.year, +parts.month-1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+    const diffHours = (asUTC - date.getTime()) / 3600000;
+    return Math.round(diffHours); // east positive, west negative
+  }catch{
+    return -Math.round(date.getTimezoneOffset()/60);
+  }
+}
+
+async function loadSolunar(place){
+  try{
+    const tz = place.tz || 'UTC';
+    const ymd = solunarDateYMD(tz, new Date());
+    const offset = tzOffsetHours(tz, new Date());
+    const url = `https://api.solunar.org/solunar/${place.lat},${place.lon},${ymd},${offset}`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+
+    const majors = [];
+    if(data.major1Start && data.major1Stop) majors.push(`${data.major1Start}–${data.major1Stop}`);
+    if(data.major2Start && data.major2Stop) majors.push(`${data.major2Start}–${data.major2Stop}`);
+    els.majorTimes.textContent = majors.length ? majors.join(' · ') : '—';
+
+    const minors = [];
+    if(data.minor1Start && data.minor1Stop) minors.push(`${data.minor1Start}–${data.minor1Stop}`);
+    if(data.minor2Start && data.minor2Stop) minors.push(`${data.minor2Start}–${data.minor2Stop}`);
+    els.minorTimes.textContent = minors.length ? minors.join(' · ') : '—';
+  }catch(e){
+    els.majorTimes.textContent='—';
+    els.minorTimes.textContent='—';
+  }
+}
 
 /* =================== Utilities =================== */
 function parseWindMph(str){ const m=(str&&str.match(/\d+/g))?str.match(/\d+/g).map(n=>parseInt(n,10)):[]; return m.length?Math.max(...m):NaN; }
@@ -670,9 +727,8 @@ async function loadAll(place){
       drawHourly(hourlyAll);
     } else { drawHourly([]); }
 
-    // Solunar
-    const todayLocal=toDateInTZ(place.tz,new Date()); const {majors,minors}=solunarWindows(todayLocal,place.lat,place.lon,place.tz);
-    els.majorTimes.textContent=majors; els.minorTimes.textContent=minors;
+    // Solunar via solunar.org
+    await loadSolunar(place);
 
     // Tides near coast
     await loadTidesIfCoastal(place.lat, place.lon, place.tz);
