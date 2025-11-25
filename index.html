@@ -791,7 +791,7 @@ async function loadTidesIfCoastal(lat, lon, tz){
   }
 }
 
-/* =================== Misc helpers =================== */
+/* ================== Misc helpers =================== */
 function degToCardinal(deg){
   const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW','N'];
   return dirs[Math.round(((deg%360)+360)%360/22.5)];
