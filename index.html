@@ -12,7 +12,7 @@
   <!-- Icon used when added to Home Screen (adjust path/size as needed) -->
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
 
-  <!-- Viewport for mobile (unchanged) -->
+  <!-- Viewport for mobile -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
   <style>
@@ -108,7 +108,7 @@
       <div id="zipMsg" class="muted" style="margin-top:8px;font-size:13px">Enter a ZIP or city + state. ZIP + city/state use Zippopotam.us; “Your location” uses your device GPS.</div>
     </div>
     <div class="muted" style="margin-top:10px">
-      Weather: National Weather Service (api.weather.gov). Tides: NOAA CO-OPS (api.tidesandcurrents.noaa.gov). Solunar: Solunar.org API.
+      Weather: National Weather Service (api.weather.gov). Tides: NOAA CO-OPS (api.tidesandcurrents.noaa.gov). Solunar: Solunar.org API. Sunrise/Sunset: sunrise-sunset.org.
     </div>
   </div>
 
@@ -137,6 +137,7 @@
             </div>
             <div class="cond muted" id="condText">—</div>
             <div class="muted" id="observed" style="font-size:12px;margin-top:4px">Observed —</div>
+            <div class="muted" id="sunTimes" style="font-size:12px;margin-top:2px">Sunrise — • Sunset —</div>
           </div>
         </div>
         <div class="grid-4" style="flex:1">
@@ -160,9 +161,9 @@
       </div>
     </div>
 
-    <!-- 10-DAY -->
+    <!-- 7-DAY -->
     <div class="card" style="margin-top:12px">
-      <h2 style="margin:0 0 8px">10-Day Forecast</h2>
+      <h2 style="margin:0 0 8px">7-Day Forecast</h2>
       <div class="grid-7" id="days"></div>
     </div>
 
@@ -223,6 +224,7 @@ let hourlyPlotState=null, hourlyAll=[], flags={temp:true,wind:true,pop:false,dew
 let currentPlaceKey=null, currentPlace=null, runningController=null;
 let latestDailyIconUrl = ''; // fallback for current icon if obs lacks one
 let dailyByKey = {}; // keyed by YYYY-MM-DD for day detail view
+let sunCache = {};   // sunrise/sunset cache keyed by YYYY-MM-DD
 
 /* Seeds (look like saved; removable) */
 const SEEDS = [
@@ -270,6 +272,7 @@ const els = {
   ccWind:document.getElementById('ccWind'),
   ccDew:document.getElementById('ccDew'),
   ccChill:document.getElementById('ccChill'),
+  sunTimes:document.getElementById('sunTimes'),
   dayDetailCard:document.getElementById('dayDetailCard'),
   dayDetailTitle:document.getElementById('dayDetailTitle'),
   dayDetailBody:document.getElementById('dayDetailBody'),
@@ -405,6 +408,7 @@ function openDetail(key, place){
 function resetDetail(place){
   latestDailyIconUrl='';
   dailyByKey={};
+  sunCache={};
   els.placeTitle.textContent=place.label||'—';
   els.placeMeta.textContent=`${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz||'—'}`;
   els.temp.textContent='—'; els.unit.textContent='°F'; els.observed.textContent='Observed —';
@@ -414,13 +418,14 @@ function resetDetail(place){
   els.obsApiLink.href=els.dailyApiLink.href=els.hourlyApiLink.href='#'; setStatus('Loading…');
   els.tidesCard.style.display='none'; els.tideGrid.innerHTML=''; els.tideStationLbl.textContent='—';
   els.dayDetailCard.style.display='none'; els.dayDetailBody.innerHTML='—';
+  if(els.sunTimes) els.sunTimes.textContent='Sunrise — • Sunset —';
   flags={temp:true,wind:true,pop:false,dew:false};
   document.querySelectorAll('.toggle').forEach(b=>b.classList.toggle('active', flags[b.dataset.series]));
 }
 async function fetchJson(url, accept='application/geo+json', ctl){ const res=await fetch(url,{headers:{Accept:accept},signal:ctl?.signal}); if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`); return res.json(); }
 function cancelInFlight(){ if(runningController) try{runningController.abort()}catch{} runningController=new AbortController(); return runningController; }
 
-/* =================== 10-day HL + icons =================== */
+/* =================== 7-day HL + icons =================== */
 function dayCardHL(d){
   const div=document.createElement('div'); div.className='day';
   div.innerHTML = `<h3>${d.name}</h3>
@@ -433,7 +438,7 @@ function buildHighLow(periods){
   const byDay=new Map();
   for(const p of periods){
     const dt=new Date(p.startTime);
-    const key=dt.toISOString().slice(0,10); // YYYY-MM-DD
+    const key=dt.toISOString().slice(0,10); // YYYY-MM-DD (UTC date)
     const rec=byDay.get(key)||{
       key,
       name: dt.toLocaleDateString(undefined,{weekday:'short'}),
@@ -456,18 +461,63 @@ function buildHighLow(periods){
     rec.periods.push(p);
     byDay.set(key, rec);
   }
-  const arr = Array.from(byDay.values()).slice(0,10);
+  const arr = Array.from(byDay.values()).slice(0,7); // 7 days
   if(arr[0]?.icon) latestDailyIconUrl = arr[0].icon; // for current icon fallback
   const byKey={};
   arr.forEach(d=>{ byKey[d.key]=d; });
   return {arr, byKey};
 }
 
+/* =================== Sunrise / Sunset helpers =================== */
+function ymdForTZ(tz, date=new Date()){
+  const parts = new Intl.DateTimeFormat('en-CA',{
+    timeZone:tz,
+    year:'numeric',
+    month:'2-digit',
+    day:'2-digit'
+  }).formatToParts(date).reduce((acc,p)=>{acc[p.type]=p.value;return acc;}, {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+function fmtLocalTime(d, tz){
+  return new Intl.DateTimeFormat([], { timeZone:tz, hour:'numeric', minute:'2-digit' }).format(d);
+}
+
+async function fetchSunTimes(lat, lon, tz, dayKey){
+  const key = dayKey || ymdForTZ(tz, new Date());
+  if(sunCache[key]) return sunCache[key];
+  const url = `https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lon}&date=${key}&formatted=0`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const data = await res.json();
+  if(!data || data.status!=='OK' || !data.results) throw new Error('Bad response');
+  const sunriseUtc = new Date(data.results.sunrise);
+  const sunsetUtc  = new Date(data.results.sunset);
+  const val = { sunrise:sunriseUtc, sunset:sunsetUtc, key };
+  sunCache[key]=val;
+  return val;
+}
+function formatSunTimesText(tz, sun){
+  if(!sun) return 'Sunrise — • Sunset —';
+  const sr = sun.sunrise ? fmtLocalTime(sun.sunrise, tz) : '—';
+  const ss = sun.sunset  ? fmtLocalTime(sun.sunset,  tz) : '—';
+  return `Sunrise ${sr} • Sunset ${ss}`;
+}
+
 /* =================== Day detail =================== */
-function openDayDetail(dayKey){
+async function openDayDetail(dayKey){
   const rec = dailyByKey[dayKey];
-  if(!rec) return;
+  if(!rec || !currentPlace) return;
   els.dayDetailTitle.textContent = `${rec.name} details`;
+
+  let sunriseBlock = '';
+  try{
+    const tz = currentPlace.tz || 'UTC';
+    const sun = await fetchSunTimes(currentPlace.lat, currentPlace.lon, tz, dayKey);
+    const txt = formatSunTimesText(tz, sun);
+    sunriseBlock = `<div class="muted" style="margin-bottom:8px;font-size:13px">${txt}</div>`;
+  }catch{
+    sunriseBlock = '';
+  }
 
   const parts = [];
   (rec.periods||[]).forEach(p=>{
@@ -486,7 +536,7 @@ function openDayDetail(dayKey){
     </div>`);
   });
 
-  els.dayDetailBody.innerHTML = parts.join('') || '<div class="muted">No additional details for this day.</div>';
+  els.dayDetailBody.innerHTML = sunriseBlock + (parts.join('') || '<div class="muted">No additional details for this day.</div>');
   els.dayDetailCard.style.display='';
   els.dayDetailCard.scrollIntoView({behavior:'smooth', block:'start'});
 }
@@ -692,7 +742,17 @@ async function loadAll(place){
     const chill = Number.isFinite(tempF)&&Number.isFinite(windMph) ? fWindChill(tempF, windMph) : null;
     els.ccChill.textContent = (chill!=null) ? `${chill}°F` : '—';
 
-    // Daily forecast (for 10-day + icon fallback)
+    // Sunrise/Sunset for "today" at this place (current conditions)
+    try{
+      const tz = place.tz || 'UTC';
+      const todayKey = ymdForTZ(tz, new Date());
+      const sun = await fetchSunTimes(place.lat, place.lon, tz, todayKey);
+      if(els.sunTimes) els.sunTimes.textContent = formatSunTimesText(tz, sun);
+    }catch{
+      if(els.sunTimes) els.sunTimes.textContent = 'Sunrise — • Sunset —';
+    }
+
+    // Daily forecast (for 7-day + icon fallback)
     els.dailyApiLink.href=props.forecast||'#'; els.days.innerHTML='';
     dailyByKey={};
     if(props.forecast){
@@ -791,7 +851,7 @@ async function loadTidesIfCoastal(lat, lon, tz){
   }
 }
 
-/* ================== Misc helpers =================== */
+/* =================== Misc helpers =================== */
 function degToCardinal(deg){
   const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW','N'];
   return dirs[Math.round(((deg%360)+360)%360/22.5)];
