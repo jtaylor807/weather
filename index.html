@@ -2,21 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Weather + Solunar • Saved Locations + Tides</title>
+  <title>SkyScout Weather</title>
 
-  <!-- iOS Safari standalone web app -->
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Weather + Solunar">
-
-  <!-- Icon used when added to Home Screen (adjust path/size as needed) -->
-  <link rel="apple-touch-icon" href="/icons/icon-192.png">
-
-  <!-- Viewport for mobile -->
+  <!-- Viewport -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
+  <!-- iOS: Add to Home Screen standalone -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SkyScout">
+
+  <!-- Theme -->
+  <meta name="theme-color" content="#0b1220">
+
+  <!-- Icons (adjust paths if you have different files) -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
+
+  <!-- Single-file manifest via data: URL (best effort; iOS ignores manifest for A2HS behavior, but others use it) -->
+  <link rel="manifest" href='data:application/manifest+json,{"name":"SkyScout Weather","short_name":"SkyScout","start_url":"./","display":"standalone","background_color":"%230b1220","theme_color":"%230b1220","icons":[{"src":"/icons/icon-192.png","sizes":"192x192","type":"image/png"},{"src":"/icons/icon-512.png","sizes":"512x512","type":"image/png"}]}'>
+
   <style>
-    :root { color-scheme: dark; --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3; --wind:#ffd27a; --pop:#9ea7ff; --dew:#7ae2a5; }
+    :root { color-scheme: dark; --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3; --wind:#ffd27a; --pop:#9ea7ff; --dew:#7ae2a5; --gust:#ffb86b; --cloud:#b7c2ff; }
     html,body{height:100%;margin:0;background:var(--bg);color:#e6eef7;font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji",sans-serif;-webkit-text-size-adjust:100%}
     .wrap{max-width:1100px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
     a{color:var(--accent);text-decoration:none;border-bottom:1px dashed rgba(110,231,255,.35)}
@@ -55,10 +63,10 @@
     .chart-wrap{position:relative;width:100%;height:360px;touch-action:manipulation}
     canvas{width:100%;height:100%;display:block;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
     .tooltip{position:absolute;pointer-events:none;background:#0b1220;color:#e6eef7;border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:6px 8px;font-size:12px;transform:translate(-50%,-110%);white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,.35);display:none}
-    .legend{display:flex;gap:12px;align-items:center;margin:6px 0 0 4px;font-size:12px;color:var(--muted)}
+    .legend{display:flex;gap:12px;align-items:center;margin:6px 0 0 4px;font-size:12px;color:var(--muted);flex-wrap:wrap}
     .key{display:inline-flex;align-items:center;gap:6px}
     .kbox{width:14px;height:3px;border-radius:2px;display:inline-block;background:var(--accent)}
-    .kbox.wind{background:var(--wind)} .kbox.pop{background:var(--pop)} .kbox.dew{background:var(--dew)}
+    .kbox.wind{background:var(--wind)} .kbox.pop{background:var(--pop)} .kbox.dew{background:var(--dew)} .kbox.gust{background:var(--gust)} .kbox.cloud{background:var(--cloud)}
     .toggles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
     .toggle{border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04);padding:8px 10px;border-radius:10px;cursor:pointer;font-weight:700}
     .toggle.active{outline:2px solid rgba(110,231,255,.45)}
@@ -74,6 +82,17 @@
     .tideTbl{width:100%;border-collapse:collapse;font-size:13px}
     .tideTbl td{padding:4px 6px;border-top:1px solid rgba(255,255,255,.08)}
     .hi{color:#8ee58e} .lo{color:#f7a8b8}
+
+    .banner-stale{
+      display:none;
+      background:rgba(255,143,163,.20);
+      border:1px solid rgba(255,143,163,.55);
+      color:#ffd0d8;
+      border-radius:14px;
+      padding:10px 12px;
+      font-weight:800;
+      margin-top:10px;
+    }
 
     @media (max-width:900px){
       .choices{grid-template-columns:1fr}
@@ -124,6 +143,8 @@
         <button class="btn" id="refreshBtn">Refresh</button>
       </div>
     </div>
+
+    <div id="staleBanner" class="banner-stale">Showing cached data. Last updated: —</div>
 
     <!-- Current conditions -->
     <div class="card" style="margin-top:8px">
@@ -178,16 +199,27 @@
 
     <!-- HOURLY GRAPH -->
     <div class="card">
-      <h2 style="margin:0 8px 8px 0">Next 24 Hours</h2>
+      <div class="title" style="align-items:flex-start">
+        <h2 style="margin:0 8px 8px 0">Hourly Chart</h2>
+        <div class="row">
+          <button class="btn" id="prev24Btn" title="Previous 24 hours">◀︎ Prev 24</button>
+          <button class="btn" id="next24Btn" title="Next 24 hours">Next 24 ▶︎</button>
+        </div>
+      </div>
+
       <div class="toggles">
         <button class="toggle active" data-series="temp">Temperature</button>
         <button class="toggle active" data-series="wind">Wind</button>
+        <button class="toggle" data-series="gust">Gust</button>
+        <button class="toggle" data-series="cloud">Cloud %</button>
         <button class="toggle" data-series="pop">Precip %</button>
         <button class="toggle" data-series="dew">Dewpoint</button>
       </div>
       <div class="legend">
         <span class="key"><span class="kbox"></span> Temp (°F)</span>
         <span class="key"><span class="kbox wind"></span> Wind (mph)</span>
+        <span class="key"><span class="kbox gust"></span> Gust (mph)</span>
+        <span class="key"><span class="kbox cloud"></span> Cloud (%)</span>
         <span class="key"><span class="kbox pop"></span> Precip (%)</span>
         <span class="key"><span class="kbox dew"></span> Dewpoint (°F)</span>
       </div>
@@ -195,6 +227,7 @@
         <canvas id="hourlyChart" width="1100" height="360"></canvas>
         <div class="tooltip" id="tooltip"></div>
       </div>
+      <div class="muted" id="chartRange" style="margin-top:8px;font-size:13px">—</div>
     </div>
 
     <!-- TIDES -->
@@ -220,13 +253,21 @@
 
 <script>
 /* =================== STATE =================== */
-let hourlyPlotState=null, hourlyAll=[], flags={temp:true,wind:true,pop:false,dew:false};
+let hourlyPlotState=null;
+let hourlyAllFull=[];          // full hourly array (up to 72 hours)
+let hourlyWindow=[];           // currently displayed 24-hour window
+let hourlyOffset=0;            // 0 = next 24 hours, 24 = hours 25-48, etc.
+let flags={temp:true,wind:true,gust:false,cloud:false,pop:false,dew:false};
+
 let currentPlaceKey=null, currentPlace=null, runningController=null;
-let latestDailyIconUrl = ''; // fallback for current icon if obs lacks one
-let dailyByKey = {}; // keyed by YYYY-MM-DD for day detail view
+let latestDailyIconUrl = '';
+let dailyByKey = {}; // local-day keyed: YYYY-MM-DD (in place.tz)
 let sunCache = {};   // sunrise/sunset cache keyed by YYYY-MM-DD
 
-/* Seeds (look like saved; removable) */
+const CACHE_KEY='wx.cache.v2';
+const LAST_VIEWED_KEY='wx.lastViewedKey.v1';
+
+/* Seeds */
 const SEEDS = [
   { key:'queencreek', label:'Queen Creek, AZ', lat:33.2425, lon:-111.6343, tz:'America/Phoenix' },
   { key:'sunnyvale',  label:'Sunnyvale, CA',    lat:37.3688, lon:-122.0363, tz:'America/Los_Angeles' },
@@ -276,7 +317,11 @@ const els = {
   dayDetailCard:document.getElementById('dayDetailCard'),
   dayDetailTitle:document.getElementById('dayDetailTitle'),
   dayDetailBody:document.getElementById('dayDetailBody'),
-  dayDetailClose:document.getElementById('dayDetailClose')
+  dayDetailClose:document.getElementById('dayDetailClose'),
+  staleBanner:document.getElementById('staleBanner'),
+  prev24Btn:document.getElementById('prev24Btn'),
+  next24Btn:document.getElementById('next24Btn'),
+  chartRange:document.getElementById('chartRange')
 };
 
 /* =================== SAVED LOCATIONS =================== */
@@ -311,12 +356,49 @@ function upsertSaved(place){
 }
 function removeSaved(key){ saveSaved(loadSaved().filter(p=>p.key!==key)); if(currentPlaceKey===key) updateSaveButtons(); }
 function isSaved(key){ return loadSaved().some(p=>p.key===key); }
-function updateSaveButtons(){ const s=isSaved(currentPlaceKey); els.saveBtn.textContent=s?'Saved ✓':'Save'; els.removeBtn.disabled=!s; }
+function updateSaveButtons(){
+  const s=isSaved(currentPlaceKey);
+  els.saveBtn.textContent=s?'Saved ✓':'Save';
+  els.removeBtn.disabled=!s;
+}
+
+/* =================== Cache =================== */
+function loadCacheAll(){
+  try{ return JSON.parse(localStorage.getItem(CACHE_KEY)||'{}'); }catch{ return {}; }
+}
+function saveCacheAll(obj){ localStorage.setItem(CACHE_KEY, JSON.stringify(obj)); }
+function setCache(placeKey, payload){
+  const all = loadCacheAll();
+  all[placeKey] = payload;
+  saveCacheAll(all);
+}
+function getCache(placeKey){
+  const all = loadCacheAll();
+  return all[placeKey] || null;
+}
+function fmtWhen(ts){
+  try{ return new Date(ts).toLocaleString(); }catch{ return '—'; }
+}
+function showStaleBanner(ts){
+  els.staleBanner.textContent = `Showing cached data. Last updated: ${fmtWhen(ts)}`;
+  els.staleBanner.style.display='';
+}
+function hideStaleBanner(){
+  els.staleBanner.style.display='none';
+}
 
 /* =================== NAV / INTERACTIONS =================== */
-els.back.addEventListener('click', ()=>{ cancelInFlight(); els.detail.style.display='none'; els.home.style.display=''; history.replaceState({}, '', '#/'); renderSaved(); }, {passive:true});
+els.back.addEventListener('click', ()=>{
+  cancelInFlight();
+  els.detail.style.display='none';
+  els.home.style.display='';
+  history.replaceState({}, '', '#/');
+  renderSaved();
+}, {passive:true});
+
 els.saveBtn.addEventListener('click', ()=>{ if(currentPlace){ upsertSaved(currentPlace); } }, {passive:true});
 els.removeBtn.addEventListener('click', ()=>{ if(currentPlaceKey) removeSaved(currentPlaceKey); }, {passive:true});
+
 els.shareBtn.addEventListener('click', ()=>{
   if(!currentPlace) return;
   const key=encodeURIComponent(currentPlaceKey);
@@ -327,7 +409,7 @@ els.shareBtn.addEventListener('click', ()=>{
   setStatus('Share link copied.','ok');
 },{passive:true});
 
-/* ZIP + CITY/STATE + GEO entry */
+/* ZIP + CITY/STATE + GEO */
 els.zipForm.addEventListener('submit', async (e)=>{
   e.preventDefault();
   const zip=(els.zipInput.value||'').trim();
@@ -379,12 +461,7 @@ async function lookupCityState(city, stateAbbr){
   if(!r.ok) throw new Error(`No data for ${city}, ${stateAbbr}`);
   const j=await r.json();
   const p=j.places?.[0]; if(!p) throw new Error('Malformed city data');
-  return {
-    lat:parseFloat(p.latitude),
-    lon:parseFloat(p.longitude),
-    placeName:p['place name'],
-    stateAbbr:p['state abbreviation'] || stateAbbr.toUpperCase()
-  };
+  return { lat:parseFloat(p.latitude), lon:parseFloat(p.longitude), placeName:p['place name'], stateAbbr:p['state abbreviation'] || stateAbbr.toUpperCase() };
 }
 function guessTZ(stateAbbr, lat, lon){
   const pac=['CA','WA','OR','NV'], mtn=['AZ','UT','CO','NM','MT','WY','ID'];
@@ -398,34 +475,148 @@ function guessTZ(stateAbbr, lat, lon){
 }
 function setStatus(text, cls){ els.status.textContent=text; els.status.className='status '+(cls||''); }
 
+async function fetchJson(url, accept='application/geo+json', ctl){
+  const res=await fetch(url,{headers:{Accept:accept},signal:ctl?.signal});
+  if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  return res.json();
+}
+function cancelInFlight(){
+  if(runningController) try{runningController.abort()}catch{}
+  runningController=new AbortController();
+  return runningController;
+}
+
+/* Local-day key in a specific tz */
+function dayKeyInTZ(date, tz){
+  const parts = new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'})
+    .formatToParts(date).reduce((a,c)=>{a[c.type]=c.value;return a;},{});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+function weekdayShortInTZ(date, tz){
+  return new Intl.DateTimeFormat(undefined,{timeZone:tz,weekday:'short'}).format(date);
+}
+
 /* =================== VIEW / LOAD =================== */
 function openDetail(key, place){
-  cancelInFlight(); currentPlaceKey=key; currentPlace=place; hourlyAll=[]; resetDetail(place);
-  els.home.style.display='none'; els.detail.style.display=''; history.replaceState({}, '', `#/${encodeURIComponent(key)}`);
+  cancelInFlight();
+  currentPlaceKey=key;
+  currentPlace=place;
+  localStorage.setItem(LAST_VIEWED_KEY, key);
+
+  resetDetail(place);
+  els.home.style.display='none';
+  els.detail.style.display='';
+  history.replaceState({}, '', `#/${encodeURIComponent(key)}`);
   updateSaveButtons();
-  loadAll(place).catch(err=>setStatus(`Load failed: ${err.message}`,'err'));
+
+  // After 10s, if not fresh yet, show cached data if available
+  const openKey = key;
+  const startedAt = Date.now();
+  let freshArrived = false;
+
+  const timer = setTimeout(()=>{
+    if(freshArrived) return;
+    if(currentPlaceKey !== openKey) return;
+    const cached = getCache(openKey);
+    if(cached){
+      applyCachedToUI(cached, {showBanner:true});
+      showStaleBanner(cached.updatedAt);
+      setStatus('Showing cached data while waiting for live refresh…','err');
+    }
+  }, 10000);
+
+  loadAll(place).then(()=>{
+    freshArrived = true;
+    clearTimeout(timer);
+  }).catch(err=>{
+    clearTimeout(timer);
+    setStatus(`Load failed: ${err.message}`,'err');
+  });
 }
+
 function resetDetail(place){
+  hideStaleBanner();
   latestDailyIconUrl='';
   dailyByKey={};
   sunCache={};
+  hourlyAllFull=[];
+  hourlyWindow=[];
+  hourlyOffset=0;
+
   els.placeTitle.textContent=place.label||'—';
   els.placeMeta.textContent=`${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz||'—'}`;
   els.temp.textContent='—'; els.unit.textContent='°F'; els.observed.textContent='Observed —';
   els.station.textContent='—'; els.condText.textContent='—'; els.condIcon.src='';
   els.ccHumidity.textContent='—'; els.ccWind.textContent='—'; els.ccDew.textContent='—'; els.ccChill.textContent='—';
-  els.days.innerHTML=''; drawHourly([]); els.majorTimes.textContent='—'; els.minorTimes.textContent='—';
-  els.obsApiLink.href=els.dailyApiLink.href=els.hourlyApiLink.href='#'; setStatus('Loading…');
-  els.tidesCard.style.display='none'; els.tideGrid.innerHTML=''; els.tideStationLbl.textContent='—';
-  els.dayDetailCard.style.display='none'; els.dayDetailBody.innerHTML='—';
-  if(els.sunTimes) els.sunTimes.textContent='Sunrise — • Sunset —';
-  flags={temp:true,wind:true,pop:false,dew:false};
-  document.querySelectorAll('.toggle').forEach(b=>b.classList.toggle('active', flags[b.dataset.series]));
-}
-async function fetchJson(url, accept='application/geo+json', ctl){ const res=await fetch(url,{headers:{Accept:accept},signal:ctl?.signal}); if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`); return res.json(); }
-function cancelInFlight(){ if(runningController) try{runningController.abort()}catch{} runningController=new AbortController(); return runningController; }
+  els.sunTimes.textContent='Sunrise — • Sunset —';
 
-/* =================== 7-day HL + icons =================== */
+  els.days.innerHTML='';
+  drawHourly([]);
+  els.chartRange.textContent='—';
+
+  els.majorTimes.textContent='—';
+  els.minorTimes.textContent='—';
+
+  els.obsApiLink.href=els.dailyApiLink.href=els.hourlyApiLink.href='#';
+  setStatus('Loading…');
+  els.tidesCard.style.display='none'; els.tideGrid.innerHTML=''; els.tideStationLbl.textContent='—';
+
+  els.dayDetailCard.style.display='none'; els.dayDetailBody.innerHTML='—';
+
+  flags={temp:true,wind:true,gust:false,cloud:false,pop:false,dew:false};
+  document.querySelectorAll('.toggle').forEach(b=>b.classList.toggle('active', !!flags[b.dataset.series]));
+
+  updateChartNavButtons();
+}
+
+els.refresh.addEventListener('click', ()=> currentPlace && loadAll(currentPlace), {passive:true});
+
+/* =================== 7-day grouping (LOCAL DATE) =================== */
+function buildLocal7Day(periods, tz){
+  const byDay = new Map();
+
+  for(const p of periods){
+    const dt = new Date(p.startTime);
+    const key = dayKeyInTZ(dt, tz);
+
+    const rec = byDay.get(key) || {
+      key,
+      name: weekdayShortInTZ(dt, tz),
+      high:null,
+      low:null,
+      icon:'',
+      short:'',
+      dayPeriod:null,
+      nightPeriod:null
+    };
+
+    const tF = (p.temperatureUnit==='F') ? p.temperature : Math.round((p.temperature*9/5)+32);
+
+    // High/low + best icon/short
+    if(p.isDaytime){
+      rec.high = rec.high==null ? tF : Math.max(rec.high, tF);
+      rec.icon = rec.icon || p.icon || '';
+      rec.short = rec.short || p.shortForecast || '';
+      // "Saturday" day
+      if(!rec.dayPeriod) rec.dayPeriod = p;
+    } else {
+      rec.low = rec.low==null ? tF : Math.min(rec.low, tF);
+      if(!rec.short) rec.short = p.shortForecast || '';
+      if(!rec.icon) rec.icon = p.icon || '';
+      // "Saturday Night" (same local day key)
+      if(!rec.nightPeriod) rec.nightPeriod = p;
+    }
+
+    byDay.set(key, rec);
+  }
+
+  const arr = Array.from(byDay.values()).slice(0,7);
+  const byKey = {};
+  arr.forEach(d=>byKey[d.key]=d);
+  if(arr[0]?.icon) latestDailyIconUrl = arr[0].icon;
+  return {arr, byKey};
+}
+
 function dayCardHL(d){
   const div=document.createElement('div'); div.className='day';
   div.innerHTML = `<h3>${d.name}</h3>
@@ -434,109 +625,66 @@ function dayCardHL(d){
                    <div class="w">${d.short || ''}</div>`;
   return div;
 }
-function buildHighLow(periods){
-  const byDay=new Map();
-  for(const p of periods){
-    const dt=new Date(p.startTime);
-    const key=dt.toISOString().slice(0,10); // YYYY-MM-DD (UTC date)
-    const rec=byDay.get(key)||{
-      key,
-      name: dt.toLocaleDateString(undefined,{weekday:'short'}),
-      high:null,
-      low:null,
-      icon:'',
-      short:'',
-      periods:[]
-    };
-    const t=p.temperatureUnit==='F'?p.temperature:Math.round((p.temperature*9/5)+32);
-    if(p.isDaytime){
-      rec.high = rec.high==null? t : Math.max(rec.high,t);
-      rec.icon = rec.icon || p.icon || '';
-      rec.short = rec.short || p.shortForecast || '';
-    } else {
-      rec.low = rec.low==null? t : Math.min(rec.low,t);
-      rec.short = rec.short || p.shortForecast || '';
-      if(!rec.icon) rec.icon = p.icon || '';
-    }
-    rec.periods.push(p);
-    byDay.set(key, rec);
-  }
-  const arr = Array.from(byDay.values()).slice(0,7); // 7 days
-  if(arr[0]?.icon) latestDailyIconUrl = arr[0].icon; // for current icon fallback
-  const byKey={};
-  arr.forEach(d=>{ byKey[d.key]=d; });
-  return {arr, byKey};
-}
 
-/* =================== Sunrise / Sunset helpers =================== */
-function ymdForTZ(tz, date=new Date()){
-  const parts = new Intl.DateTimeFormat('en-CA',{
-    timeZone:tz,
-    year:'numeric',
-    month:'2-digit',
-    day:'2-digit'
-  }).formatToParts(date).reduce((acc,p)=>{acc[p.type]=p.value;return acc;}, {});
-  return `${parts.year}-${parts.month}-${parts.day}`;
-}
-function fmtLocalTime(d, tz){
-  return new Intl.DateTimeFormat([], { timeZone:tz, hour:'numeric', minute:'2-digit' }).format(d);
-}
-
+/* =================== Sunrise/Sunset =================== */
 async function fetchSunTimes(lat, lon, tz, dayKey){
-  const key = dayKey || ymdForTZ(tz, new Date());
-  if(sunCache[key]) return sunCache[key];
-  const url = `https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lon}&date=${key}&formatted=0`;
+  if(sunCache[dayKey]) return sunCache[dayKey];
+  const url = `https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lon}&date=${dayKey}&formatted=0`;
   const res = await fetch(url);
   if(!res.ok) throw new Error('HTTP '+res.status);
   const data = await res.json();
   if(!data || data.status!=='OK' || !data.results) throw new Error('Bad response');
   const sunriseUtc = new Date(data.results.sunrise);
   const sunsetUtc  = new Date(data.results.sunset);
-  const val = { sunrise:sunriseUtc, sunset:sunsetUtc, key };
-  sunCache[key]=val;
+  const val = { sunrise:sunriseUtc, sunset:sunsetUtc, key:dayKey };
+  sunCache[dayKey]=val;
   return val;
 }
+function fmtLocalTime(d, tz){
+  return new Intl.DateTimeFormat([], { timeZone:tz, hour:'numeric', minute:'2-digit' }).format(d);
+}
 function formatSunTimesText(tz, sun){
-  if(!sun) return 'Sunrise — • Sunset —';
-  const sr = sun.sunrise ? fmtLocalTime(sun.sunrise, tz) : '—';
-  const ss = sun.sunset  ? fmtLocalTime(sun.sunset,  tz) : '—';
+  const sr = sun?.sunrise ? fmtLocalTime(sun.sunrise, tz) : '—';
+  const ss = sun?.sunset  ? fmtLocalTime(sun.sunset,  tz) : '—';
   return `Sunrise ${sr} • Sunset ${ss}`;
 }
 
-/* =================== Day detail =================== */
+/* =================== Day detail: Day + Night for THAT day =================== */
 async function openDayDetail(dayKey){
   const rec = dailyByKey[dayKey];
   if(!rec || !currentPlace) return;
+
   els.dayDetailTitle.textContent = `${rec.name} details`;
 
-  let sunriseBlock = '';
+  let sunLine = '';
   try{
-    const tz = currentPlace.tz || 'UTC';
-    const sun = await fetchSunTimes(currentPlace.lat, currentPlace.lon, tz, dayKey);
-    const txt = formatSunTimesText(tz, sun);
-    sunriseBlock = `<div class="muted" style="margin-bottom:8px;font-size:13px">${txt}</div>`;
+    const sun = await fetchSunTimes(currentPlace.lat, currentPlace.lon, currentPlace.tz||'UTC', dayKey);
+    sunLine = `<div class="muted" style="margin-bottom:8px;font-size:13px">${formatSunTimesText(currentPlace.tz||'UTC', sun)}</div>`;
   }catch{
-    sunriseBlock = '';
+    sunLine = '';
   }
 
-  const parts = [];
-  (rec.periods||[]).forEach(p=>{
-    const t = new Date(p.startTime);
-    const whenStr = t.toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+  const blocks = [];
+  const makeBlock = (p, labelFallback) => {
+    if(!p) return '';
+    const detail = p.detailedForecast || p.shortForecast || '';
     const temp = (p.temperature!=null) ? `${p.temperature}°${p.temperatureUnit||'F'}` : '—';
     const wind = p.windSpeed || '—';
-    const pop = p.probabilityOfPrecipitation && typeof p.probabilityOfPrecipitation.value==='number'
+    const pop = (p.probabilityOfPrecipitation && typeof p.probabilityOfPrecipitation.value==='number')
       ? `${p.probabilityOfPrecipitation.value}%`
       : '—';
-    const detail = p.detailedForecast || p.shortForecast || '';
-    parts.push(`<div class="pill" style="margin-bottom:8px">
-      <div><strong>${p.name || rec.name}</strong> • ${whenStr}</div>
+    return `<div class="pill" style="margin-bottom:8px">
+      <div><strong>${p.name || labelFallback}</strong></div>
       <div class="muted" style="margin-top:4px">${detail}</div>
       <div class="muted" style="margin-top:4px;font-size:13px">Temp: ${temp} · Wind: ${wind} · Precip: ${pop}</div>
-    </div>`);
-  });
+    </div>`;
+  };
 
-  els.dayDetailBody.innerHTML = sunriseBlock + (parts.join('') || '<div class="muted">No additional details for this day.</div>');
+  // The key fix: show this day's Day + this day's Night
+  blocks.push(makeBlock(rec.dayPeriod, rec.name));
+  blocks.push(makeBlock(rec.nightPeriod, `${rec.name} Night`));
+
+  els.dayDetailBody.innerHTML = sunLine + (blocks.filter(Boolean).join('') || '<div class="muted">No details for this day.</div>');
   els.dayDetailCard.style.display='';
   els.dayDetailCard.scrollIntoView({behavior:'smooth', block:'start'});
 }
@@ -546,12 +694,57 @@ els.dayDetailClose.addEventListener('click', ()=>{
   els.dayDetailBody.innerHTML='—';
 }, {passive:true});
 
-/* =================== Chart + toggles (Temp/Wind/Precip/Dew) =================== */
-function setupCanvas(){ const dpr=window.devicePixelRatio||1, cssW=els.canvas.clientWidth||1100, cssH=els.canvas.clientHeight||360;
+/* =================== Chart =================== */
+function setupCanvas(){
+  const dpr=window.devicePixelRatio||1, cssW=els.canvas.clientWidth||1100, cssH=els.canvas.clientHeight||360;
   els.canvas.width=Math.round(cssW*dpr); els.canvas.height=Math.round(cssH*dpr);
-  const ctx=els.canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); return {ctx,W:cssW,H:cssH}; }
-function niceStep(raw){ const s=[1,2,5,10], pow=10**Math.floor(Math.log10(raw||1)); for(const k of s){const v=k*pow; if(raw<=v) return v;} return 10*pow; }
-const hourLabel = d => d.toLocaleTimeString([], { hour:'numeric' });
+  const ctx=els.canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,W:cssW,H:cssH};
+}
+function niceStep(raw){
+  const s=[1,2,5,10], pow=10**Math.floor(Math.log10(raw||1));
+  for(const k of s){const v=k*pow; if(raw<=v) return v;}
+  return 10*pow;
+}
+function hourLabel24(d){
+  // Clean: 24h hour only (00-23)
+  return new Intl.DateTimeFormat([], { hour:'2-digit', hour12:false }).format(d).replace(/^0/,'');
+}
+function parseMph(str){
+  const m=(str&&str.match(/\d+/g))?str.match(/\d+/g).map(n=>parseInt(n,10)):[];
+  return m.length?Math.max(...m):NaN;
+}
+
+function updateChartWindow(){
+  const start = hourlyOffset;
+  const end = hourlyOffset + 24;
+  hourlyWindow = hourlyAllFull.slice(start, end);
+  drawHourly(hourlyWindow);
+  updateChartNavButtons();
+
+  if(hourlyWindow.length){
+    const a = hourlyWindow[0].time;
+    const b = hourlyWindow[hourlyWindow.length-1].time;
+    els.chartRange.textContent = `Hours ${hourlyOffset+1}–${Math.min(hourlyOffset+24, hourlyAllFull.length)} • ${a.toLocaleString()} → ${b.toLocaleString()}`;
+  } else {
+    els.chartRange.textContent = '—';
+  }
+}
+
+function updateChartNavButtons(){
+  els.prev24Btn.disabled = hourlyOffset<=0;
+  els.next24Btn.disabled = (hourlyOffset+24)>=hourlyAllFull.length;
+}
+els.prev24Btn.addEventListener('click', ()=>{
+  hourlyOffset = Math.max(0, hourlyOffset-24);
+  updateChartWindow();
+},{passive:true});
+els.next24Btn.addEventListener('click', ()=>{
+  if(hourlyOffset+24 < hourlyAllFull.length){
+    hourlyOffset += 24;
+    updateChartWindow();
+  }
+},{passive:true});
 
 function drawHourly(points){
   const { ctx, W, H } = setupCanvas(); ctx.clearRect(0,0,W,H);
@@ -566,41 +759,67 @@ function drawHourly(points){
   const temps=points.map(p=>p.temp).filter(Number.isFinite);
   const dews=points.map(p=>p.dew).filter(Number.isFinite);
   const leftVals=[...(flags.temp?temps:[]), ...(flags.dew?dews:[])];
-  const rightWind=points.map(p=>p.wind).filter(Number.isFinite);
-  const rightPop=points.map(p=>p.pop).filter(Number.isFinite);
-  const rightVals=[...(flags.wind?rightWind:[]), ...(flags.pop?rightPop:[])];
+
+  const winds=points.map(p=>p.wind).filter(Number.isFinite);
+  const gusts=points.map(p=>p.gust).filter(Number.isFinite);
+  const pops =points.map(p=>p.pop).filter(Number.isFinite);
+  const clouds=points.map(p=>p.cloud).filter(Number.isFinite);
+  const rightVals=[
+    ...(flags.wind?winds:[]),
+    ...(flags.gust?gusts:[]),
+    ...(flags.pop?pops:[]),
+    ...(flags.cloud?clouds:[])
+  ];
 
   const lmin=Math.floor(Math.min(...(leftVals.length?leftVals:[0])));
   const lmax=Math.ceil(Math.max(...(leftVals.length?leftVals:[1])));
   const rmin=0;
   const rmax=Math.max(100, Math.ceil(Math.max(...(rightVals.length?rightVals:[5]))));
+
   const x=i=>pad.l+(i/(points.length-1))*chartW;
   const yL=v=>pad.t+(1-(v-lmin)/(lmax-lmin))*chartH;
   const yR=v=>pad.t+(1-(v-rmin)/(rmax-rmin))*chartH;
 
+  // grid lines (left scale)
   ctx.strokeStyle='rgba(230,238,247,0.12)'; ctx.beginPath();
   const tStep=niceStep((lmax-lmin)/6);
   for(let v=Math.ceil(lmin/tStep)*tStep; v<=lmax; v+=tStep){ const yy=yL(v); ctx.moveTo(pad.l,yy); ctx.lineTo(W-pad.r,yy); }
   ctx.stroke();
 
-  ctx.fillStyle='#9fb3c8'; ctx.font='12px -apple-system, Segoe UI, Roboto, Helvetica, Arial'; ctx.textAlign='right'; ctx.textBaseline='middle';
-  for(let v=Math.ceil(lmin/tStep)*tStep; v<=lmax; v+=tStep){ ctx.fillText(`${Math.round(v)}°F`, pad.l-8, yL(v)); }
-  const rStep=niceStep((rmax-rmin)/5); ctx.textAlign='left';
-  for(let v=Math.ceil(rmin/rStep)*tStep; v<=rmax; v+=rStep){ ctx.fillText(`${Math.round(v)}`, W-pad.r+8, yR(v)); }
+  // axes labels
+  ctx.fillStyle='#9fb3c8'; ctx.font='12px -apple-system, Segoe UI, Roboto, Helvetica, Arial'; ctx.textBaseline='middle';
 
+  ctx.textAlign='right';
+  for(let v=Math.ceil(lmin/tStep)*tStep; v<=lmax; v+=tStep){ ctx.fillText(`${Math.round(v)}°F`, pad.l-8, yL(v)); }
+
+  const rStep=niceStep((rmax-rmin)/5);
+  ctx.textAlign='left';
+  for(let v=Math.ceil(rmin/rStep)*rStep; v<=rmax; v+=rStep){ ctx.fillText(`${Math.round(v)}`, W-pad.r+8, yR(v)); }
+
+  // x labels: fewer and cleaner
   ctx.textAlign='center'; ctx.textBaseline='top';
-  for(let i=0;i<points.length;i+=3){ ctx.fillText(hourLabel(points[i].time), x(i), H-pad.b+8); }
+  for(let i=0;i<points.length;i+=4){
+    ctx.fillText(hourLabel24(points[i].time), x(i), H-pad.b+8);
+  }
 
   function drawSeries(getY, color, accessor, dashed=false){
     const vals=points.map(accessor);
     ctx.beginPath(); let started=false;
-    for(let i=0;i<points.length;i++){ const v=vals[i]; if(!Number.isFinite(v)) continue; const xx=x(i), yy=getY(v); if(!started){ctx.moveTo(xx,yy); started=true;} else ctx.lineTo(xx,yy); }
+    for(let i=0;i<points.length;i++){
+      const v=vals[i];
+      if(!Number.isFinite(v)) continue;
+      const xx=x(i), yy=getY(v);
+      if(!started){ctx.moveTo(xx,yy); started=true;} else ctx.lineTo(xx,yy);
+    }
     ctx.strokeStyle=color; ctx.lineWidth=2.25; dashed?ctx.setLineDash([4,3]):ctx.setLineDash([]); ctx.stroke(); ctx.setLineDash([]);
   }
-  if(flags.temp) drawSeries(yL, '#6ee7ff', p=>p.temp);
-  if(flags.dew)  drawSeries(yL, getCSS('--dew','#7ae2a5'), p=>p.dew);
-  if(flags.wind) drawSeries(yR, getCSS('--wind','#ffd27a'), p=>p.wind, true);   // mph
-  if(flags.pop)  drawSeries(yR, getCSS('--pop','#9ea7ff'), p=>p.pop,  true);    // %
+
+  if(flags.temp)  drawSeries(yL, '#6ee7ff', p=>p.temp);
+  if(flags.dew)   drawSeries(yL, getCSS('--dew','#7ae2a5'), p=>p.dew);
+  if(flags.wind)  drawSeries(yR, getCSS('--wind','#ffd27a'), p=>p.wind, true);
+  if(flags.gust)  drawSeries(yR, getCSS('--gust','#ffb86b'), p=>p.gust, true);
+  if(flags.pop)   drawSeries(yR, getCSS('--pop','#9ea7ff'),  p=>p.pop,  true);
+  if(flags.cloud) drawSeries(yR, getCSS('--cloud','#b7c2ff'),p=>p.cloud,true);
 
   hourlyPlotState={x, points, yL, yR};
 }
@@ -608,58 +827,62 @@ function getCSS(name, fallback){ return getComputedStyle(document.documentElemen
 
 (function(){
   const c=els.canvas, tip=els.tooltip;
-  const show=(cx,cy)=>{ const r=c.getBoundingClientRect(); if(!hourlyPlotState){ tip.style.display='none'; return; }
-    const {x,points,yL}=hourlyPlotState; let best=null,bd=1e9;
-    for(let i=0;i<points.length;i++){ const dx=x(i)-(cx-r.left), dy=yL(points[i].temp)-(cy-r.top), d=Math.hypot(dx,dy); if(d<bd){bd=d; best=points[i];} }
-    if(!best||bd>28){ tip.style.display='none'; return; }
-    const parts=[]; if(flags.temp&&Number.isFinite(best.temp)) parts.push(`${Math.round(best.temp)}°F`);
-    if(flags.wind&&Number.isFinite(best.wind)) parts.push(`Wind ${Math.round(best.wind)} mph${best.windDir? ' '+best.windDir:''}`);
-    if(flags.pop&&Number.isFinite(best.pop)) parts.push(`Precip ${Math.round(best.pop)}%`);
-    if(flags.dew&&Number.isFinite(best.dew)) parts.push(`Dew ${Math.round(best.dew)}°F`);
-    tip.textContent=`${hourLabel(best.time)} • ${parts.join(' • ')}`;
+  const show=(cx,cy)=>{
+    const r=c.getBoundingClientRect();
+    if(!hourlyPlotState){ tip.style.display='none'; return; }
+    const {x,points,yL}=hourlyPlotState;
+    let best=null,bd=1e9;
+
+    for(let i=0;i<points.length;i++){
+      const dx=x(i)-(cx-r.left);
+      const dy=yL(points[i].temp ?? 0)-(cy-r.top);
+      const d=Math.hypot(dx,dy);
+      if(d<bd){bd=d; best=points[i];}
+    }
+    if(!best||bd>32){ tip.style.display='none'; return; }
+
+    const parts=[];
+    if(flags.temp && Number.isFinite(best.temp)) parts.push(`${Math.round(best.temp)}°F`);
+    if(flags.wind && Number.isFinite(best.wind)) parts.push(`Wind ${Math.round(best.wind)} mph${best.windDir? ' '+best.windDir:''}`);
+    if(flags.gust && Number.isFinite(best.gust)) parts.push(`Gust ${Math.round(best.gust)} mph`);
+    if(flags.cloud && Number.isFinite(best.cloud)) parts.push(`Cloud ${Math.round(best.cloud)}%`);
+    if(flags.pop && Number.isFinite(best.pop)) parts.push(`Precip ${Math.round(best.pop)}%`);
+    if(flags.dew && Number.isFinite(best.dew)) parts.push(`Dew ${Math.round(best.dew)}°F`);
+
+    tip.textContent=`${hourLabel24(best.time)} • ${parts.join(' • ')}`;
     tip.style.display='block'; tip.style.left=`${cx-r.left}px`; tip.style.top=`${cy-r.top}px`;
   };
   c.addEventListener('mousemove',e=>show(e.clientX,e.clientY),{passive:true});
   c.addEventListener('mouseleave',()=>tip.style.display='none',{passive:true});
   c.addEventListener('touchstart',e=>{const t=e.changedTouches[0];show(t.clientX,t.clientY);},{passive:true});
   c.addEventListener('touchmove',e=>{const t=e.changedTouches[0];show(t.clientX,t.clientY);},{passive:true});
+
   document.querySelectorAll('.toggle').forEach(b=>{
-    b.addEventListener('click', ()=>{ b.classList.toggle('active'); flags[b.dataset.series]=b.classList.contains('active'); drawHourly(hourlyAll); }, {passive:true});
+    b.addEventListener('click', ()=>{
+      b.classList.toggle('active');
+      flags[b.dataset.series]=b.classList.contains('active');
+      drawHourly(hourlyWindow);
+    }, {passive:true});
   });
 })();
 
 /* =================== Solunar via solunar.org API =================== */
 function solunarDateYMD(tz, date=new Date()){
-  const parts = new Intl.DateTimeFormat('en-CA',{
-    timeZone:tz,
-    year:'numeric',
-    month:'2-digit',
-    day:'2-digit'
-  }).formatToParts(date).reduce((acc,p)=>{acc[p.type]=p.value;return acc;}, {});
-  return `${parts.year}${parts.month}${parts.day}`; // yyyymmdd
+  const parts = new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'})
+    .formatToParts(date).reduce((acc,p)=>{acc[p.type]=p.value;return acc;}, {});
+  return `${parts.year}${parts.month}${parts.day}`;
 }
-
 function tzOffsetHours(tz, date=new Date()){
   try{
-    const fmt = new Intl.DateTimeFormat('en-US',{
-      timeZone:tz,
-      year:'numeric',
-      month:'2-digit',
-      day:'2-digit',
-      hour:'2-digit',
-      minute:'2-digit',
-      second:'2-digit',
-      hour12:false
-    });
+    const fmt = new Intl.DateTimeFormat('en-US',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
     const parts = fmt.formatToParts(date).reduce((acc,p)=>{acc[p.type]=p.value;return acc;}, {});
     const asUTC = Date.UTC(+parts.year, +parts.month-1, +parts.day, +parts.hour, +parts.minute, +parts.second);
     const diffHours = (asUTC - date.getTime()) / 3600000;
-    return Math.round(diffHours); // east positive, west negative
+    return Math.round(diffHours);
   }catch{
     return -Math.round(date.getTimezoneOffset()/60);
   }
 }
-
 async function loadSolunar(place){
   try{
     const tz = place.tz || 'UTC';
@@ -679,24 +902,104 @@ async function loadSolunar(place){
     if(data.minor1Start && data.minor1Stop) minors.push(`${data.minor1Start}–${data.minor1Stop}`);
     if(data.minor2Start && data.minor2Stop) minors.push(`${data.minor2Start}–${data.minor2Stop}`);
     els.minorTimes.textContent = minors.length ? minors.join(' · ') : '—';
-  }catch(e){
+  }catch{
     els.majorTimes.textContent='—';
     els.minorTimes.textContent='—';
   }
 }
 
 /* =================== Utilities =================== */
-function parseWindMph(str){ const m=(str&&str.match(/\d+/g))?str.match(/\d+/g).map(n=>parseInt(n,10)):[]; return m.length?Math.max(...m):NaN; }
-function haversineMi(lat1,lon1,lat2,lon2){ const R=3958.7613; const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180, dφ=(lat2-lat1)*Math.PI/180, dλ=(lon2-lon1)*Math.PI/180; const a=Math.sin(dφ/2)**2+Math.cos(φ1)*Math.cos(φ2)*Math.sin(dλ/2)**2; return 2*R*Math.asin(Math.sqrt(a)); }
+function haversineMi(lat1,lon1,lat2,lon2){
+  const R=3958.7613;
+  const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180, dφ=(lat2-lat1)*Math.PI/180, dλ=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dφ/2)**2+Math.cos(φ1)*Math.cos(φ2)*Math.sin(dλ/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
 function ms2mph(ms){ return ms==null?NaN:ms*2.2369362921; }
-function fWindChill(tempF, windMph){ if(tempF<=50 && windMph>=3){ const v=Math.pow(windMph,0.16); return Math.round(35.74 + 0.6215*tempF - 35.75*v + 0.4275*tempF*v); } return null; }
+function fWindChill(tempF, windMph){
+  if(tempF<=50 && windMph>=3){
+    const v=Math.pow(windMph,0.16);
+    return Math.round(35.74 + 0.6215*tempF - 35.75*v + 0.4275*tempF*v);
+  }
+  return null;
+}
+function degToCardinal(deg){
+  const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW','N'];
+  return dirs[Math.round(((deg%360)+360)%360/22.5)];
+}
+
+/* =================== Apply cached payload =================== */
+function applyCachedToUI(payload, opts={showBanner:false}){
+  if(!payload) return;
+  hideStaleBanner();
+  if(opts.showBanner) showStaleBanner(payload.updatedAt);
+
+  // Place labels
+  if(payload.placeTitle) els.placeTitle.textContent = payload.placeTitle;
+  if(payload.placeMeta) els.placeMeta.textContent = payload.placeMeta;
+
+  // Current conditions
+  els.temp.textContent = payload.temp ?? '—';
+  els.unit.textContent = payload.unit ?? '°F';
+  els.condText.textContent = payload.condText ?? '—';
+  els.observed.textContent = payload.observed ?? 'Observed —';
+  els.station.textContent = payload.station ?? '—';
+  els.condIcon.src = payload.condIcon ?? '';
+
+  els.ccHumidity.textContent = payload.ccHumidity ?? '—';
+  els.ccWind.textContent = payload.ccWind ?? '—';
+  els.ccDew.textContent = payload.ccDew ?? '—';
+  els.ccChill.textContent = payload.ccChill ?? '—';
+  els.sunTimes.textContent = payload.sunTimes ?? 'Sunrise — • Sunset —';
+
+  // Links
+  els.obsApiLink.href = payload.obsApiLink ?? '#';
+  els.dailyApiLink.href = payload.dailyApiLink ?? '#';
+  els.hourlyApiLink.href = payload.hourlyApiLink ?? '#';
+
+  // Daily
+  dailyByKey = payload.dailyByKey || {};
+  els.days.innerHTML='';
+  if(payload.dailyArr && payload.dailyArr.length){
+    payload.dailyArr.forEach(d=>{
+      const card = dayCardHL(d);
+      card.addEventListener('click', ()=>openDayDetail(d.key));
+      els.days.appendChild(card);
+    });
+  }
+
+  // Hourly
+  hourlyAllFull = payload.hourlyAllFull || [];
+  hourlyOffset = payload.hourlyOffset || 0;
+  updateChartWindow();
+
+  // Solunar
+  els.majorTimes.textContent = payload.majorTimes ?? '—';
+  els.minorTimes.textContent = payload.minorTimes ?? '—';
+
+  // Tides (optional; keep hidden if not cached)
+  if(payload.tides && payload.tides.visible){
+    els.tidesCard.style.display='';
+    els.tideStationLbl.textContent = payload.tides.label || '—';
+    els.tideGrid.innerHTML = payload.tides.html || '';
+  } else {
+    els.tidesCard.style.display='none';
+  }
+}
 
 /* =================== Loader =================== */
 async function loadAll(place){
-  const ctl=cancelInFlight(); setStatus('Loading…'); els.refresh.disabled=true;
+  const ctl=cancelInFlight();
+  hideStaleBanner();
+  setStatus('Loading…');
+  els.refresh.disabled=true;
+
   try{
+    // points
     const points=await fetchJson(`https://api.weather.gov/points/${place.lat},${place.lon}`,'application/geo+json',ctl);
-    const props=points.properties||{}; const rel=props.relativeLocation?.properties;
+    const props=points.properties||{};
+    const rel=props.relativeLocation?.properties;
+
     if(rel?.city&&rel?.state){
       currentPlace.cityState = `${rel.city}, ${rel.state}`;
       els.placeTitle.textContent = currentPlace.cityState;
@@ -708,15 +1011,18 @@ async function loadAll(place){
     }
     updateSaveButtons();
 
+    // stations + latest obs
     const stations=await fetchJson(props.observationStations,'application/geo+json',ctl);
-    const s0=stations.features?.[0]; const stationId=s0?.properties?.stationIdentifier || s0?.id?.split('/').pop();
+    const s0=stations.features?.[0];
+    const stationId=s0?.properties?.stationIdentifier || s0?.id?.split('/').pop();
     els.station.textContent=s0?.properties?.name || stationId || '—';
 
     const latestUrl=`https://api.weather.gov/stations/${stationId}/observations/latest?require_qc=true`;
     els.obsApiLink.href=latestUrl;
-    const latest=await fetchJson(latestUrl,'application/geo+json',ctl); const lp=latest.properties||{};
 
-    // Current conditions
+    const latest=await fetchJson(latestUrl,'application/geo+json',ctl);
+    const lp=latest.properties||{};
+
     let tempC=(lp.temperature&&typeof lp.temperature.value==='number')?lp.temperature.value:null;
     let dewC=(lp.dewpoint&&typeof lp.dewpoint.value==='number')?lp.dewpoint.value:null;
     let rh=(lp.relativeHumidity&&typeof lp.relativeHumidity.value==='number')?lp.relativeHumidity.value:null;
@@ -731,73 +1037,160 @@ async function loadAll(place){
 
     if(tempC!=null){ els.temp.textContent=`${Math.round((tempC*9/5)+32)}`; els.unit.textContent='°F'; }
     els.observed.textContent = lp.timestamp ? new Date(lp.timestamp).toLocaleString() : 'Observed —';
-    const condText = lp.textDescription || '—';
-    els.condText.textContent = condText;
+    els.condText.textContent = lp.textDescription || '—';
 
-    // Fill CC KV fields
     els.ccHumidity.textContent = Number.isFinite(rh) ? `${Math.round(rh)}%` : '—';
     els.ccWind.textContent = Number.isFinite(windMph) ? `${Math.round(windMph)} mph${lp.windDirection && lp.windDirection.value!=null ? ' '+degToCardinal(lp.windDirection.value) : ''}` : '—';
     els.ccDew.textContent = Number.isFinite(dewC) ? `${Math.round((dewC*9/5)+32)}°F` : '—';
+
     const tempF = Number.isFinite(tempC) ? (tempC*9/5+32) : NaN;
     const chill = Number.isFinite(tempF)&&Number.isFinite(windMph) ? fWindChill(tempF, windMph) : null;
     els.ccChill.textContent = (chill!=null) ? `${chill}°F` : '—';
 
-    // Sunrise/Sunset for "today" at this place (current conditions)
-    try{
-      const tz = place.tz || 'UTC';
-      const todayKey = ymdForTZ(tz, new Date());
-      const sun = await fetchSunTimes(place.lat, place.lon, tz, todayKey);
-      if(els.sunTimes) els.sunTimes.textContent = formatSunTimesText(tz, sun);
-    }catch{
-      if(els.sunTimes) els.sunTimes.textContent = 'Sunrise — • Sunset —';
-    }
-
-    // Daily forecast (for 7-day + icon fallback)
-    els.dailyApiLink.href=props.forecast||'#'; els.days.innerHTML='';
+    // Daily forecast
+    els.dailyApiLink.href=props.forecast||'#';
+    els.days.innerHTML='';
     dailyByKey={};
+
     if(props.forecast){
       const daily=await fetchJson(props.forecast,'application/geo+json',ctl);
-      const res = buildHighLow(daily.properties?.periods||[]);
-      dailyByKey = res.byKey;
-      res.arr.forEach(d=>{
+      const periods = daily.properties?.periods || [];
+      const built = buildLocal7Day(periods, place.tz || 'UTC');
+      dailyByKey = built.byKey;
+      if(built.arr[0]?.icon) latestDailyIconUrl = built.arr[0].icon;
+
+      built.arr.forEach(d=>{
         const card = dayCardHL(d);
         card.addEventListener('click', ()=>openDayDetail(d.key));
         els.days.appendChild(card);
       });
     }
 
-    // Choose icon for current: prefer obs icon if present (not always), else first daily icon we cached
-    const obsIcon = lp.icon || '';
-    els.condIcon.src = obsIcon || latestDailyIconUrl || '';
+    // Current icon: prefer obs icon else daily
+    els.condIcon.src = (lp.icon || '') || latestDailyIconUrl || '';
 
-    // Hourly all fields
+    // Sunrise/Sunset for "today" at this place (based on local day)
+    try{
+      const tz = place.tz || 'UTC';
+      const todayKey = dayKeyInTZ(new Date(), tz);
+      const sun = await fetchSunTimes(place.lat, place.lon, tz, todayKey);
+      els.sunTimes.textContent = formatSunTimesText(tz, sun);
+    }catch{
+      els.sunTimes.textContent = 'Sunrise — • Sunset —';
+    }
+
+    // Hourly forecast: pull up to 72 hours so you can advance by 24
     els.hourlyApiLink.href=props.forecastHourly||'#';
-    hourlyAll=[];
+    hourlyAllFull=[];
+    hourlyOffset=0;
+
     if(props.forecastHourly){
       const hourly=await fetchJson(props.forecastHourly,'application/geo+json',ctl);
-      const h=(hourly.properties?.periods||[]).slice(0,24);
-      hourlyAll=h.map(p=>{
+      const h=(hourly.properties?.periods||[]).slice(0,72);
+
+      hourlyAllFull = h.map(p=>{
         const tF=p.temperatureUnit==='F'?p.temperature:Math.round((p.temperature*9/5)+32);
-        const w=parseWindMph(p.windSpeed);
+        const w=parseMph(p.windSpeed);
+        const g=parseMph(p.windGust); // may be undefined
         const pop=(p.probabilityOfPrecipitation && typeof p.probabilityOfPrecipitation.value==='number')? p.probabilityOfPrecipitation.value : NaN;
         const dewC2=(p.dewpoint && typeof p.dewpoint.value==='number')? p.dewpoint.value : NaN;
         const dewF=Number.isFinite(dewC2)? Math.round((dewC2*9/5)+32) : NaN;
-        return { time:new Date(p.startTime), temp:tF, wind:isNaN(w)?NaN:w, windDir:p.windDirection||'', pop:pop, dew:dewF };
-      });
-      drawHourly(hourlyAll);
-    } else { drawHourly([]); }
 
-    // Solunar via solunar.org
+        // cloudCover sometimes exists as percent on NWS hourly periods
+        const cloud = (p.cloudCover && typeof p.cloudCover.value==='number') ? p.cloudCover.value : NaN;
+
+        return {
+          time:new Date(p.startTime),
+          temp:tF,
+          wind:isNaN(w)?NaN:w,
+          gust:isNaN(g)?NaN:g,
+          windDir:p.windDirection||'',
+          pop:pop,
+          dew:dewF,
+          cloud:cloud
+        };
+      });
+
+      updateChartWindow();
+    } else {
+      updateChartWindow();
+    }
+
+    // Solunar
     await loadSolunar(place);
 
     // Tides near coast
     await loadTidesIfCoastal(place.lat, place.lon, place.tz);
 
+    // Cache snapshot for this place
+    const snap = buildSnapshotForCache(place);
+    setCache(currentPlaceKey, snap);
+
+    hideStaleBanner();
     setStatus('Live data loaded.','ok');
-  }catch(e){ if(e.name==='AbortError') return; setStatus(`Unable to load: ${e.message}`,'err'); }
-  finally{ els.refresh.disabled=false; }
+
+    return true;
+
+  }catch(e){
+    if(e.name==='AbortError') return false;
+
+    // If load fails and cache exists, show it immediately
+    const cached = getCache(currentPlaceKey);
+    if(cached){
+      applyCachedToUI(cached, {showBanner:true});
+      showStaleBanner(cached.updatedAt);
+    }
+    setStatus(`Unable to load: ${e.message}`,'err');
+    return false;
+  }finally{
+    els.refresh.disabled=false;
+  }
 }
-els.refresh.addEventListener('click', ()=> currentPlace && loadAll(currentPlace), {passive:true});
+
+/* Build a cache payload from current UI + data */
+function buildSnapshotForCache(place){
+  return {
+    updatedAt: Date.now(),
+    placeTitle: els.placeTitle.textContent,
+    placeMeta: els.placeMeta.textContent,
+
+    temp: els.temp.textContent,
+    unit: els.unit.textContent,
+    condText: els.condText.textContent,
+    observed: els.observed.textContent,
+    station: els.station.textContent,
+    condIcon: els.condIcon.src,
+
+    ccHumidity: els.ccHumidity.textContent,
+    ccWind: els.ccWind.textContent,
+    ccDew: els.ccDew.textContent,
+    ccChill: els.ccChill.textContent,
+    sunTimes: els.sunTimes.textContent,
+
+    obsApiLink: els.obsApiLink.href,
+    dailyApiLink: els.dailyApiLink.href,
+    hourlyApiLink: els.hourlyApiLink.href,
+
+    dailyArr: Object.values(dailyByKey).slice(0,7).map(d=>({
+      key:d.key, name:d.name, high:d.high, low:d.low, icon:d.icon, short:d.short,
+      dayPeriod:d.dayPeriod || null,
+      nightPeriod:d.nightPeriod || null
+    })),
+    dailyByKey: dailyByKey,
+
+    hourlyAllFull: hourlyAllFull,
+    hourlyOffset: hourlyOffset,
+
+    majorTimes: els.majorTimes.textContent,
+    minorTimes: els.minorTimes.textContent,
+
+    tides: {
+      visible: els.tidesCard.style.display !== 'none',
+      label: els.tideStationLbl.textContent,
+      html: els.tideGrid.innerHTML
+    }
+  };
+}
 
 /* =================== TIDES =================== */
 async function loadTidesIfCoastal(lat, lon, tz){
@@ -805,10 +1198,16 @@ async function loadTidesIfCoastal(lat, lon, tz){
     const pad = 0.8;
     const bbox = `${(lon-pad).toFixed(3)},${(lat-pad).toFixed(3)},${(lon+pad).toFixed(3)},${(lat+pad).toFixed(3)}`;
     const meta = await fetch(`https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels&bbox=${bbox}`).then(r=>r.json());
-    const stations = (meta?.stations||[]).map(s=>({ id: s.id || s.stationId || s.station_id, name: s.name, lat: +s.lat, lon: +s.lng || +s.lon })).filter(s=>isFinite(s.lat)&&isFinite(s.lon));
+    const stations = (meta?.stations||[])
+      .map(s=>({ id: s.id || s.stationId || s.station_id, name: s.name, lat: +s.lat, lon: +s.lng || +s.lon }))
+      .filter(s=>isFinite(s.lat)&&isFinite(s.lon));
     if(!stations.length){ els.tidesCard.style.display='none'; return; }
+
     let best = null, bd=1e9;
-    for(const s of stations){ const d=haversineMi(lat,lon,s.lat,s.lon); if(d<bd){bd=d; best=s;} }
+    for(const s of stations){
+      const d=haversineMi(lat,lon,s.lat,s.lon);
+      if(d<bd){bd=d; best=s;}
+    }
     if(bd>50){ els.tidesCard.style.display='none'; return; }
 
     const today = new Date();
@@ -851,13 +1250,7 @@ async function loadTidesIfCoastal(lat, lon, tz){
   }
 }
 
-/* =================== Misc helpers =================== */
-function degToCardinal(deg){
-  const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW','N'];
-  return dirs[Math.round(((deg%360)+360)%360/22.5)];
-}
-
-/* =================== Deep-link + initial render =================== */
+/* =================== Deep-link + Startup Prefetch =================== */
 function openFromHash(){
   if(!location.hash.startsWith('#/')) return false;
   const frag=decodeURIComponent(location.hash.slice(2));
@@ -868,13 +1261,123 @@ function openFromHash(){
     const tz=p.get('tz')||'UTC';
     const lat=parseFloat(p.get('lat')); const lon=parseFloat(p.get('lon'));
     if(!isFinite(lat)||!isFinite(lon)) return false;
-    openDetail(key,{key,label,lat,lon,tz}); return true;
+    openDetail(key,{key,label,lat,lon,tz});
+    return true;
   }
   const hit=loadSaved().find(x=>x.key===frag);
   if(hit){ openDetail(hit.key, hit); return true; }
   return false;
 }
-window.addEventListener('DOMContentLoaded', ()=>{ renderSaved(); if(!openFromHash()){ /* wait for user */ }});
+
+/* Background prefetch to refresh cache (no UI) */
+async function prefetchPlace(place){
+  try{
+    const points=await fetchJson(`https://api.weather.gov/points/${place.lat},${place.lon}`);
+    const props=points.properties||{};
+    const stations=await fetchJson(props.observationStations);
+    const s0=stations.features?.[0];
+    const stationId=s0?.properties?.stationIdentifier || s0?.id?.split('/').pop();
+    const latestUrl=`https://api.weather.gov/stations/${stationId}/observations/latest?require_qc=true`;
+    const latest=await fetchJson(latestUrl);
+    const lp=latest.properties||{};
+
+    const daily = props.forecast ? await fetchJson(props.forecast) : null;
+    const hourly = props.forecastHourly ? await fetchJson(props.forecastHourly) : null;
+
+    const rel = props.relativeLocation?.properties;
+    const title = (rel?.city && rel?.state) ? `${rel.city}, ${rel.state}` : (place.label || '—');
+    const meta = (rel?.city && rel?.state)
+      ? `${rel.city}, ${rel.state} • ${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`
+      : `${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`;
+
+    // minimal snapshot build (not perfect UI match, but enough for fallback)
+    const tempC=(lp.temperature&&typeof lp.temperature.value==='number')?lp.temperature.value:null;
+    const dewC=(lp.dewpoint&&typeof lp.dewpoint.value==='number')?lp.dewpoint.value:null;
+    const rh=(lp.relativeHumidity&&typeof lp.relativeHumidity.value==='number')?lp.relativeHumidity.value:null;
+    const windMs=(lp.windSpeed&&typeof lp.windSpeed.value==='number')?lp.windSpeed.value:null;
+    const windMph = Number.isFinite(windMs)? ms2mph(windMs): NaN;
+
+    const tempF = Number.isFinite(tempC) ? (tempC*9/5+32) : NaN;
+    const chill = Number.isFinite(tempF)&&Number.isFinite(windMph) ? fWindChill(tempF, windMph) : null;
+
+    const dailyPeriods = daily?.properties?.periods || [];
+    const built = buildLocal7Day(dailyPeriods, place.tz||'UTC');
+
+    const hourlyPeriods = (hourly?.properties?.periods||[]).slice(0,72);
+    const hourlyFull = hourlyPeriods.map(p=>{
+      const tF=p.temperatureUnit==='F'?p.temperature:Math.round((p.temperature*9/5)+32);
+      const w=parseMph(p.windSpeed);
+      const g=parseMph(p.windGust);
+      const pop=(p.probabilityOfPrecipitation && typeof p.probabilityOfPrecipitation.value==='number')? p.probabilityOfPrecipitation.value : NaN;
+      const dewC2=(p.dewpoint && typeof p.dewpoint.value==='number')? p.dewpoint.value : NaN;
+      const dewF=Number.isFinite(dewC2)? Math.round((dewC2*9/5)+32) : NaN;
+      const cloud = (p.cloudCover && typeof p.cloudCover.value==='number') ? p.cloudCover.value : NaN;
+      return { time:new Date(p.startTime), temp:tF, wind:isNaN(w)?NaN:w, gust:isNaN(g)?NaN:g, windDir:p.windDirection||'', pop:pop, dew:dewF, cloud:cloud };
+    });
+
+    const tz = place.tz || 'UTC';
+    const todayKey = dayKeyInTZ(new Date(), tz);
+    let sunText = 'Sunrise — • Sunset —';
+    try{
+      const sun = await fetchSunTimes(place.lat, place.lon, tz, todayKey);
+      sunText = formatSunTimesText(tz, sun);
+    }catch{}
+
+    setCache(place.key, {
+      updatedAt: Date.now(),
+      placeTitle: title,
+      placeMeta: meta,
+      temp: (tempC!=null) ? String(Math.round(tempF)) : '—',
+      unit: '°F',
+      condText: lp.textDescription || '—',
+      observed: lp.timestamp ? new Date(lp.timestamp).toLocaleString() : 'Observed —',
+      station: s0?.properties?.name || stationId || '—',
+      condIcon: lp.icon || (built.arr[0]?.icon||''),
+      ccHumidity: Number.isFinite(rh) ? `${Math.round(rh)}%` : '—',
+      ccWind: Number.isFinite(windMph) ? `${Math.round(windMph)} mph${lp.windDirection && lp.windDirection.value!=null ? ' '+degToCardinal(lp.windDirection.value) : ''}` : '—',
+      ccDew: Number.isFinite(dewC) ? `${Math.round((dewC*9/5)+32)}°F` : '—',
+      ccChill: (chill!=null) ? `${chill}°F` : '—',
+      sunTimes: sunText,
+      obsApiLink: latestUrl,
+      dailyApiLink: props.forecast || '#',
+      hourlyApiLink: props.forecastHourly || '#',
+      dailyArr: built.arr,
+      dailyByKey: built.byKey,
+      hourlyAllFull: hourlyFull,
+      hourlyOffset: 0,
+      majorTimes: '—',
+      minorTimes: '—',
+      tides: { visible:false }
+    });
+
+  }catch{
+    // ignore background prefetch errors
+  }
+}
+
+window.addEventListener('DOMContentLoaded', async ()=>{
+  renderSaved();
+
+  // Prefetch defaults (refresh cache)
+  for(const p of SEEDS){
+    prefetchPlace(p);
+  }
+
+  // If hash opens, do that first
+  if(openFromHash()) return;
+
+  // Auto-open last viewed if it's saved
+  const lastKey = localStorage.getItem(LAST_VIEWED_KEY);
+  if(lastKey && isSaved(lastKey)){
+    const hit = loadSaved().find(x=>x.key===lastKey);
+    if(hit){
+      openDetail(hit.key, hit);
+      return;
+    }
+  }
+
+  // Otherwise remain on saved list
+});
 </script>
 </body>
 </html>
