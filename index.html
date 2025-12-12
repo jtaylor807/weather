@@ -20,11 +20,11 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
 
-  <!-- Single-file manifest via data: URL (best effort; iOS ignores manifest for A2HS behavior, but others use it) -->
+  <!-- Single-file manifest via data: URL -->
   <link rel="manifest" href='data:application/manifest+json,{"name":"SkyScout Weather","short_name":"SkyScout","start_url":"./","display":"standalone","background_color":"%230b1220","theme_color":"%230b1220","icons":[{"src":"/icons/icon-192.png","sizes":"192x192","type":"image/png"},{"src":"/icons/icon-512.png","sizes":"512x512","type":"image/png"}]}'>
 
   <style>
-    :root { color-scheme: dark; --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3; --wind:#ffd27a; --pop:#9ea7ff; --dew:#7ae2a5; --gust:#ffb86b; --cloud:#b7c2ff; }
+    :root { color-scheme: dark; --bg:#0b1220; --card:#121a2b; --accent:#6ee7ff; --muted:#9fb3c8; --ok:#9aff9a; --err:#ff8fa3; --wind:#ffd27a; --pop:#9ea7ff; --dew:#7ae2a5; }
     html,body{height:100%;margin:0;background:var(--bg);color:#e6eef7;font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji",sans-serif;-webkit-text-size-adjust:100%}
     .wrap{max-width:1100px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
     a{color:var(--accent);text-decoration:none;border-bottom:1px dashed rgba(110,231,255,.35)}
@@ -66,7 +66,7 @@
     .legend{display:flex;gap:12px;align-items:center;margin:6px 0 0 4px;font-size:12px;color:var(--muted);flex-wrap:wrap}
     .key{display:inline-flex;align-items:center;gap:6px}
     .kbox{width:14px;height:3px;border-radius:2px;display:inline-block;background:var(--accent)}
-    .kbox.wind{background:var(--wind)} .kbox.pop{background:var(--pop)} .kbox.dew{background:var(--dew)} .kbox.gust{background:var(--gust)} .kbox.cloud{background:var(--cloud)}
+    .kbox.wind{background:var(--wind)} .kbox.pop{background:var(--pop)} .kbox.dew{background:var(--dew)}
     .toggles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
     .toggle{border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04);padding:8px 10px;border-radius:10px;cursor:pointer;font-weight:700}
     .toggle.active{outline:2px solid rgba(110,231,255,.45)}
@@ -136,7 +136,7 @@
     <div class="title">
       <h1 id="placeTitle">—</h1>
       <div class="row">
-        <button class="btn" id="backBtn">◀︎ Saved</button>
+        <button class="btn" id="backBtn">Home</button>
         <button class="btn" id="saveBtn" title="Save this location">Save</button>
         <button class="btn" id="removeBtn" title="Remove from saved" disabled>Remove</button>
         <button class="btn" id="shareBtn" title="Copy link to this location">Share</button>
@@ -210,16 +210,12 @@
       <div class="toggles">
         <button class="toggle active" data-series="temp">Temperature</button>
         <button class="toggle active" data-series="wind">Wind</button>
-        <button class="toggle" data-series="gust">Gust</button>
-        <button class="toggle" data-series="cloud">Cloud %</button>
         <button class="toggle" data-series="pop">Precip %</button>
         <button class="toggle" data-series="dew">Dewpoint</button>
       </div>
       <div class="legend">
         <span class="key"><span class="kbox"></span> Temp (°F)</span>
         <span class="key"><span class="kbox wind"></span> Wind (mph)</span>
-        <span class="key"><span class="kbox gust"></span> Gust (mph)</span>
-        <span class="key"><span class="kbox cloud"></span> Cloud (%)</span>
         <span class="key"><span class="kbox pop"></span> Precip (%)</span>
         <span class="key"><span class="kbox dew"></span> Dewpoint (°F)</span>
       </div>
@@ -254,15 +250,15 @@
 <script>
 /* =================== STATE =================== */
 let hourlyPlotState=null;
-let hourlyAllFull=[];          // full hourly array (up to 72 hours)
-let hourlyWindow=[];           // currently displayed 24-hour window
-let hourlyOffset=0;            // 0 = next 24 hours, 24 = hours 25-48, etc.
-let flags={temp:true,wind:true,gust:false,cloud:false,pop:false,dew:false};
+let hourlyAllFull=[];
+let hourlyWindow=[];
+let hourlyOffset=0;
+let flags={temp:true,wind:true,pop:false,dew:false};
 
 let currentPlaceKey=null, currentPlace=null, runningController=null;
 let latestDailyIconUrl = '';
-let dailyByKey = {}; // local-day keyed: YYYY-MM-DD (in place.tz)
-let sunCache = {};   // sunrise/sunset cache keyed by YYYY-MM-DD
+let dailyByKey = {};
+let sunCache = {};
 
 const CACHE_KEY='wx.cache.v2';
 const LAST_VIEWED_KEY='wx.lastViewedKey.v1';
@@ -383,9 +379,7 @@ function showStaleBanner(ts){
   els.staleBanner.textContent = `Showing cached data. Last updated: ${fmtWhen(ts)}`;
   els.staleBanner.style.display='';
 }
-function hideStaleBanner(){
-  els.staleBanner.style.display='none';
-}
+function hideStaleBanner(){ els.staleBanner.style.display='none'; }
 
 /* =================== NAV / INTERACTIONS =================== */
 els.back.addEventListener('click', ()=>{
@@ -509,9 +503,7 @@ function openDetail(key, place){
   history.replaceState({}, '', `#/${encodeURIComponent(key)}`);
   updateSaveButtons();
 
-  // After 10s, if not fresh yet, show cached data if available
   const openKey = key;
-  const startedAt = Date.now();
   let freshArrived = false;
 
   const timer = setTimeout(()=>{
@@ -563,7 +555,7 @@ function resetDetail(place){
 
   els.dayDetailCard.style.display='none'; els.dayDetailBody.innerHTML='—';
 
-  flags={temp:true,wind:true,gust:false,cloud:false,pop:false,dew:false};
+  flags={temp:true,wind:true,pop:false,dew:false};
   document.querySelectorAll('.toggle').forEach(b=>b.classList.toggle('active', !!flags[b.dataset.series]));
 
   updateChartNavButtons();
@@ -592,18 +584,15 @@ function buildLocal7Day(periods, tz){
 
     const tF = (p.temperatureUnit==='F') ? p.temperature : Math.round((p.temperature*9/5)+32);
 
-    // High/low + best icon/short
     if(p.isDaytime){
       rec.high = rec.high==null ? tF : Math.max(rec.high, tF);
       rec.icon = rec.icon || p.icon || '';
       rec.short = rec.short || p.shortForecast || '';
-      // "Saturday" day
       if(!rec.dayPeriod) rec.dayPeriod = p;
     } else {
       rec.low = rec.low==null ? tF : Math.min(rec.low, tF);
       if(!rec.short) rec.short = p.shortForecast || '';
       if(!rec.icon) rec.icon = p.icon || '';
-      // "Saturday Night" (same local day key)
       if(!rec.nightPeriod) rec.nightPeriod = p;
     }
 
@@ -664,7 +653,6 @@ async function openDayDetail(dayKey){
     sunLine = '';
   }
 
-  const blocks = [];
   const makeBlock = (p, labelFallback) => {
     if(!p) return '';
     const detail = p.detailedForecast || p.shortForecast || '';
@@ -680,7 +668,7 @@ async function openDayDetail(dayKey){
     </div>`;
   };
 
-  // The key fix: show this day's Day + this day's Night
+  const blocks = [];
   blocks.push(makeBlock(rec.dayPeriod, rec.name));
   blocks.push(makeBlock(rec.nightPeriod, `${rec.name} Night`));
 
@@ -707,7 +695,6 @@ function niceStep(raw){
   return 10*pow;
 }
 function hourLabel24(d){
-  // Clean: 24h hour only (00-23)
   return new Intl.DateTimeFormat([], { hour:'2-digit', hour12:false }).format(d).replace(/^0/,'');
 }
 function parseMph(str){
@@ -761,15 +748,8 @@ function drawHourly(points){
   const leftVals=[...(flags.temp?temps:[]), ...(flags.dew?dews:[])];
 
   const winds=points.map(p=>p.wind).filter(Number.isFinite);
-  const gusts=points.map(p=>p.gust).filter(Number.isFinite);
   const pops =points.map(p=>p.pop).filter(Number.isFinite);
-  const clouds=points.map(p=>p.cloud).filter(Number.isFinite);
-  const rightVals=[
-    ...(flags.wind?winds:[]),
-    ...(flags.gust?gusts:[]),
-    ...(flags.pop?pops:[]),
-    ...(flags.cloud?clouds:[])
-  ];
+  const rightVals=[...(flags.wind?winds:[]), ...(flags.pop?pops:[])];
 
   const lmin=Math.floor(Math.min(...(leftVals.length?leftVals:[0])));
   const lmax=Math.ceil(Math.max(...(leftVals.length?leftVals:[1])));
@@ -780,13 +760,11 @@ function drawHourly(points){
   const yL=v=>pad.t+(1-(v-lmin)/(lmax-lmin))*chartH;
   const yR=v=>pad.t+(1-(v-rmin)/(rmax-rmin))*chartH;
 
-  // grid lines (left scale)
   ctx.strokeStyle='rgba(230,238,247,0.12)'; ctx.beginPath();
   const tStep=niceStep((lmax-lmin)/6);
   for(let v=Math.ceil(lmin/tStep)*tStep; v<=lmax; v+=tStep){ const yy=yL(v); ctx.moveTo(pad.l,yy); ctx.lineTo(W-pad.r,yy); }
   ctx.stroke();
 
-  // axes labels
   ctx.fillStyle='#9fb3c8'; ctx.font='12px -apple-system, Segoe UI, Roboto, Helvetica, Arial'; ctx.textBaseline='middle';
 
   ctx.textAlign='right';
@@ -796,7 +774,6 @@ function drawHourly(points){
   ctx.textAlign='left';
   for(let v=Math.ceil(rmin/rStep)*rStep; v<=rmax; v+=rStep){ ctx.fillText(`${Math.round(v)}`, W-pad.r+8, yR(v)); }
 
-  // x labels: fewer and cleaner
   ctx.textAlign='center'; ctx.textBaseline='top';
   for(let i=0;i<points.length;i+=4){
     ctx.fillText(hourLabel24(points[i].time), x(i), H-pad.b+8);
@@ -817,9 +794,7 @@ function drawHourly(points){
   if(flags.temp)  drawSeries(yL, '#6ee7ff', p=>p.temp);
   if(flags.dew)   drawSeries(yL, getCSS('--dew','#7ae2a5'), p=>p.dew);
   if(flags.wind)  drawSeries(yR, getCSS('--wind','#ffd27a'), p=>p.wind, true);
-  if(flags.gust)  drawSeries(yR, getCSS('--gust','#ffb86b'), p=>p.gust, true);
   if(flags.pop)   drawSeries(yR, getCSS('--pop','#9ea7ff'),  p=>p.pop,  true);
-  if(flags.cloud) drawSeries(yR, getCSS('--cloud','#b7c2ff'),p=>p.cloud,true);
 
   hourlyPlotState={x, points, yL, yR};
 }
@@ -844,8 +819,6 @@ function getCSS(name, fallback){ return getComputedStyle(document.documentElemen
     const parts=[];
     if(flags.temp && Number.isFinite(best.temp)) parts.push(`${Math.round(best.temp)}°F`);
     if(flags.wind && Number.isFinite(best.wind)) parts.push(`Wind ${Math.round(best.wind)} mph${best.windDir? ' '+best.windDir:''}`);
-    if(flags.gust && Number.isFinite(best.gust)) parts.push(`Gust ${Math.round(best.gust)} mph`);
-    if(flags.cloud && Number.isFinite(best.cloud)) parts.push(`Cloud ${Math.round(best.cloud)}%`);
     if(flags.pop && Number.isFinite(best.pop)) parts.push(`Precip ${Math.round(best.pop)}%`);
     if(flags.dew && Number.isFinite(best.dew)) parts.push(`Dew ${Math.round(best.dew)}°F`);
 
@@ -927,6 +900,7 @@ function degToCardinal(deg){
   const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW','N'];
   return dirs[Math.round(((deg%360)+360)%360/22.5)];
 }
+function metersToFeet(m){ return m*3.280839895; }
 
 /* =================== Apply cached payload =================== */
 function applyCachedToUI(payload, opts={showBanner:false}){
@@ -934,11 +908,9 @@ function applyCachedToUI(payload, opts={showBanner:false}){
   hideStaleBanner();
   if(opts.showBanner) showStaleBanner(payload.updatedAt);
 
-  // Place labels
   if(payload.placeTitle) els.placeTitle.textContent = payload.placeTitle;
   if(payload.placeMeta) els.placeMeta.textContent = payload.placeMeta;
 
-  // Current conditions
   els.temp.textContent = payload.temp ?? '—';
   els.unit.textContent = payload.unit ?? '°F';
   els.condText.textContent = payload.condText ?? '—';
@@ -952,12 +924,10 @@ function applyCachedToUI(payload, opts={showBanner:false}){
   els.ccChill.textContent = payload.ccChill ?? '—';
   els.sunTimes.textContent = payload.sunTimes ?? 'Sunrise — • Sunset —';
 
-  // Links
   els.obsApiLink.href = payload.obsApiLink ?? '#';
   els.dailyApiLink.href = payload.dailyApiLink ?? '#';
   els.hourlyApiLink.href = payload.hourlyApiLink ?? '#';
 
-  // Daily
   dailyByKey = payload.dailyByKey || {};
   els.days.innerHTML='';
   if(payload.dailyArr && payload.dailyArr.length){
@@ -968,16 +938,13 @@ function applyCachedToUI(payload, opts={showBanner:false}){
     });
   }
 
-  // Hourly
   hourlyAllFull = payload.hourlyAllFull || [];
   hourlyOffset = payload.hourlyOffset || 0;
   updateChartWindow();
 
-  // Solunar
   els.majorTimes.textContent = payload.majorTimes ?? '—';
   els.minorTimes.textContent = payload.minorTimes ?? '—';
 
-  // Tides (optional; keep hidden if not cached)
   if(payload.tides && payload.tides.visible){
     els.tidesCard.style.display='';
     els.tideStationLbl.textContent = payload.tides.label || '—';
@@ -995,23 +962,26 @@ async function loadAll(place){
   els.refresh.disabled=true;
 
   try{
-    // points
     const points=await fetchJson(`https://api.weather.gov/points/${place.lat},${place.lon}`,'application/geo+json',ctl);
     const props=points.properties||{};
     const rel=props.relativeLocation?.properties;
 
+    // Elevation from points API (meters)
+    const elevM = (props.elevation && typeof props.elevation.value === 'number') ? props.elevation.value : null;
+    const elevFt = (elevM!=null) ? Math.round(metersToFeet(elevM)) : null;
+    const elevTxt = (elevFt!=null) ? ` • Elev ${elevFt.toLocaleString()} ft` : '';
+
     if(rel?.city&&rel?.state){
       currentPlace.cityState = `${rel.city}, ${rel.state}`;
       els.placeTitle.textContent = currentPlace.cityState;
-      els.placeMeta.textContent = `${rel.city}, ${rel.state} • ${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`;
+      els.placeMeta.textContent = `${rel.city}, ${rel.state} • ${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}${elevTxt}`;
     } else {
       currentPlace.cityState = place.label || '—';
       els.placeTitle.textContent = place.label || '—';
-      els.placeMeta.textContent = `${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`;
+      els.placeMeta.textContent = `${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}${elevTxt}`;
     }
     updateSaveButtons();
 
-    // stations + latest obs
     const stations=await fetchJson(props.observationStations,'application/geo+json',ctl);
     const s0=stations.features?.[0];
     const stationId=s0?.properties?.stationIdentifier || s0?.id?.split('/').pop();
@@ -1047,7 +1017,6 @@ async function loadAll(place){
     const chill = Number.isFinite(tempF)&&Number.isFinite(windMph) ? fWindChill(tempF, windMph) : null;
     els.ccChill.textContent = (chill!=null) ? `${chill}°F` : '—';
 
-    // Daily forecast
     els.dailyApiLink.href=props.forecast||'#';
     els.days.innerHTML='';
     dailyByKey={};
@@ -1066,10 +1035,8 @@ async function loadAll(place){
       });
     }
 
-    // Current icon: prefer obs icon else daily
     els.condIcon.src = (lp.icon || '') || latestDailyIconUrl || '';
 
-    // Sunrise/Sunset for "today" at this place (based on local day)
     try{
       const tz = place.tz || 'UTC';
       const todayKey = dayKeyInTZ(new Date(), tz);
@@ -1079,7 +1046,6 @@ async function loadAll(place){
       els.sunTimes.textContent = 'Sunrise — • Sunset —';
     }
 
-    // Hourly forecast: pull up to 72 hours so you can advance by 24
     els.hourlyApiLink.href=props.forecastHourly||'#';
     hourlyAllFull=[];
     hourlyOffset=0;
@@ -1091,23 +1057,17 @@ async function loadAll(place){
       hourlyAllFull = h.map(p=>{
         const tF=p.temperatureUnit==='F'?p.temperature:Math.round((p.temperature*9/5)+32);
         const w=parseMph(p.windSpeed);
-        const g=parseMph(p.windGust); // may be undefined
         const pop=(p.probabilityOfPrecipitation && typeof p.probabilityOfPrecipitation.value==='number')? p.probabilityOfPrecipitation.value : NaN;
         const dewC2=(p.dewpoint && typeof p.dewpoint.value==='number')? p.dewpoint.value : NaN;
         const dewF=Number.isFinite(dewC2)? Math.round((dewC2*9/5)+32) : NaN;
-
-        // cloudCover sometimes exists as percent on NWS hourly periods
-        const cloud = (p.cloudCover && typeof p.cloudCover.value==='number') ? p.cloudCover.value : NaN;
 
         return {
           time:new Date(p.startTime),
           temp:tF,
           wind:isNaN(w)?NaN:w,
-          gust:isNaN(g)?NaN:g,
           windDir:p.windDirection||'',
           pop:pop,
-          dew:dewF,
-          cloud:cloud
+          dew:dewF
         };
       });
 
@@ -1116,25 +1076,19 @@ async function loadAll(place){
       updateChartWindow();
     }
 
-    // Solunar
     await loadSolunar(place);
-
-    // Tides near coast
     await loadTidesIfCoastal(place.lat, place.lon, place.tz);
 
-    // Cache snapshot for this place
     const snap = buildSnapshotForCache(place);
     setCache(currentPlaceKey, snap);
 
     hideStaleBanner();
     setStatus('Live data loaded.','ok');
-
     return true;
 
   }catch(e){
     if(e.name==='AbortError') return false;
 
-    // If load fails and cache exists, show it immediately
     const cached = getCache(currentPlaceKey);
     if(cached){
       applyCachedToUI(cached, {showBanner:true});
@@ -1147,7 +1101,7 @@ async function loadAll(place){
   }
 }
 
-/* Build a cache payload from current UI + data */
+/* Build a cache payload */
 function buildSnapshotForCache(place){
   return {
     updatedAt: Date.now(),
@@ -1269,7 +1223,7 @@ function openFromHash(){
   return false;
 }
 
-/* Background prefetch to refresh cache (no UI) */
+/* Background prefetch to refresh cache */
 async function prefetchPlace(place){
   try{
     const points=await fetchJson(`https://api.weather.gov/points/${place.lat},${place.lon}`);
@@ -1285,12 +1239,16 @@ async function prefetchPlace(place){
     const hourly = props.forecastHourly ? await fetchJson(props.forecastHourly) : null;
 
     const rel = props.relativeLocation?.properties;
+
+    const elevM = (props.elevation && typeof props.elevation.value === 'number') ? props.elevation.value : null;
+    const elevFt = (elevM!=null) ? Math.round(metersToFeet(elevM)) : null;
+    const elevTxt = (elevFt!=null) ? ` • Elev ${elevFt.toLocaleString()} ft` : '';
+
     const title = (rel?.city && rel?.state) ? `${rel.city}, ${rel.state}` : (place.label || '—');
     const meta = (rel?.city && rel?.state)
-      ? `${rel.city}, ${rel.state} • ${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`
-      : `${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}`;
+      ? `${rel.city}, ${rel.state} • ${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}${elevTxt}`
+      : `${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz}${elevTxt}`;
 
-    // minimal snapshot build (not perfect UI match, but enough for fallback)
     const tempC=(lp.temperature&&typeof lp.temperature.value==='number')?lp.temperature.value:null;
     const dewC=(lp.dewpoint&&typeof lp.dewpoint.value==='number')?lp.dewpoint.value:null;
     const rh=(lp.relativeHumidity&&typeof lp.relativeHumidity.value==='number')?lp.relativeHumidity.value:null;
@@ -1307,12 +1265,10 @@ async function prefetchPlace(place){
     const hourlyFull = hourlyPeriods.map(p=>{
       const tF=p.temperatureUnit==='F'?p.temperature:Math.round((p.temperature*9/5)+32);
       const w=parseMph(p.windSpeed);
-      const g=parseMph(p.windGust);
       const pop=(p.probabilityOfPrecipitation && typeof p.probabilityOfPrecipitation.value==='number')? p.probabilityOfPrecipitation.value : NaN;
       const dewC2=(p.dewpoint && typeof p.dewpoint.value==='number')? p.dewpoint.value : NaN;
       const dewF=Number.isFinite(dewC2)? Math.round((dewC2*9/5)+32) : NaN;
-      const cloud = (p.cloudCover && typeof p.cloudCover.value==='number') ? p.cloudCover.value : NaN;
-      return { time:new Date(p.startTime), temp:tF, wind:isNaN(w)?NaN:w, gust:isNaN(g)?NaN:g, windDir:p.windDirection||'', pop:pop, dew:dewF, cloud:cloud };
+      return { time:new Date(p.startTime), temp:tF, wind:isNaN(w)?NaN:w, windDir:p.windDirection||'', pop:pop, dew:dewF };
     });
 
     const tz = place.tz || 'UTC';
@@ -1351,22 +1307,19 @@ async function prefetchPlace(place){
     });
 
   }catch{
-    // ignore background prefetch errors
+    // ignore
   }
 }
 
 window.addEventListener('DOMContentLoaded', async ()=>{
   renderSaved();
 
-  // Prefetch defaults (refresh cache)
   for(const p of SEEDS){
     prefetchPlace(p);
   }
 
-  // If hash opens, do that first
   if(openFromHash()) return;
 
-  // Auto-open last viewed if it's saved
   const lastKey = localStorage.getItem(LAST_VIEWED_KEY);
   if(lastKey && isSaved(lastKey)){
     const hit = loadSaved().find(x=>x.key===lastKey);
@@ -1375,8 +1328,6 @@ window.addEventListener('DOMContentLoaded', async ()=>{
       return;
     }
   }
-
-  // Otherwise remain on saved list
 });
 </script>
 </body>
