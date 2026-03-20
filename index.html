@@ -224,7 +224,7 @@
     <div id="radarCard" class="card" style="margin-top:12px">
       <div class="title">
         <h2 style="margin:0">Storm Radar</h2>
-        <button class="btn" id="radarRefreshBtn" type="button">Recenter</button>
+        <button class="btn" id="radarRefreshBtn" type="button">Refresh Radar</button>
       </div>
       <div class="radarShell" style="margin-top:10px">
         <div id="radarMap" class="radarMap" aria-label="Storm radar map"></div>
@@ -232,7 +232,7 @@
           <span><span class="dot warning"></span>Warnings</span>
           <span><span class="dot watch"></span>Watches</span>
           <span><span class="dot advisory"></span>Advisories / statements</span>
-          <span>Radar: Iowa State Mesonet NEXRAD</span>
+          <span>Radar: Iowa State Mesonet current reflectivity</span>
         </div>
       </div>
     </div>
@@ -325,7 +325,7 @@ const CACHE_KEY='wx.cache.v2';
 const LAST_VIEWED_KEY='wx.lastViewedKey.v1';
 const ALERT_CACHE_KEY='wx.alerts.v1';
 const ALERT_CACHE_TTL_MS=10*60*1000;
-const IEM_WMS_URL='https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r-t.cgi';
+const IEM_WMS_URL='https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0q.cgi';
 
 /* Seeds */
 const SEEDS = [
@@ -643,7 +643,23 @@ function renderAlertDetails(alerts){
 function escapeHtml(str=''){
   return String(str).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
-function ensureRadarMap(place){
+function refreshRadarOverlay(){
+  if(!radarMap) return;
+  if(radarOverlay){
+    radarMap.removeLayer(radarOverlay);
+    radarOverlay = null;
+  }
+  radarOverlay = L.tileLayer.wms(IEM_WMS_URL, {
+    layers:'nexrad-n0q-900913',
+    format:'image/png',
+    transparent:true,
+    opacity:0.64,
+    attribution:'Radar: Iowa State Mesonet',
+    uppercase:true,
+    cacheBust: Date.now()
+  }).addTo(radarMap);
+}
+function ensureRadarMap(place, forceRefresh=false){
   if(!window.L || !els.radarMap) return;
   if(!radarMap){
     radarMap = L.map(els.radarMap, { zoomControl:true, attributionControl:true });
@@ -651,13 +667,9 @@ function ensureRadarMap(place){
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(radarMap);
-    radarOverlay = L.tileLayer.wms(IEM_WMS_URL, {
-      layers:'nexrad-n0r-wmst',
-      format:'image/png',
-      transparent:true,
-      opacity:0.72,
-      attribution:'Radar: Iowa State Mesonet'
-    }).addTo(radarMap);
+    refreshRadarOverlay();
+  } else if(forceRefresh){
+    refreshRadarOverlay();
   }
   const ll = [place.lat, place.lon];
   if(!radarMarker){
@@ -669,7 +681,7 @@ function ensureRadarMap(place){
   radarMap.setView(ll, 7);
   setTimeout(()=>radarMap.invalidateSize(), 0);
 }
-els.radarRefreshBtn?.addEventListener('click', ()=>{ if(currentPlace) ensureRadarMap(currentPlace); }, {passive:true});
+els.radarRefreshBtn?.addEventListener('click', ()=>{ if(currentPlace) ensureRadarMap(currentPlace, true); }, {passive:true});
 
 /* =================== HELPERS =================== */
 async function lookupZip(zip){
