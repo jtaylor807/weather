@@ -72,6 +72,9 @@
     .toggles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
     .toggle{border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04);padding:8px 10px;border-radius:10px;cursor:pointer;font-weight:700}
     .toggle.active{outline:2px solid rgba(110,231,255,.45)}
+    .view-modes{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}
+    .view-btn{border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04);padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700;color:#e6eef7}
+    .view-btn.active{outline:2px solid rgba(110,231,255,.45);background:rgba(110,231,255,.10)}
     .zipgrid{display:grid;grid-template-columns:1.4fr .8fr;grid-template-areas:"zip go" "city state" "geo geo";gap:10px;margin-top:12px}
     #zipInput{grid-area:zip}
     #zipGo{grid-area:go}
@@ -278,6 +281,11 @@
         <canvas id="hourlyChart" width="1100" height="360"></canvas>
         <div class="tooltip" id="tooltip"></div>
       </div>
+      <div class="view-modes" aria-label="Hourly chart view range">
+        <button class="view-btn" type="button" data-window-size="4">4 Hours</button>
+        <button class="view-btn" type="button" data-window-size="12">12 Hours</button>
+        <button class="view-btn active" type="button" data-window-size="24">24 Hours</button>
+      </div>
       <div class="muted" id="chartRange" style="margin-top:8px;font-size:13px">—</div>
     </div>
 
@@ -308,6 +316,7 @@ let hourlyPlotState=null;
 let hourlyAllFull=[];
 let hourlyWindow=[];
 let hourlyOffset=0;
+let hourlyWindowSize=24;
 let flags={temp:true,wind:true,pop:false,dew:false};
 
 let currentPlaceKey=null, currentPlace=null, runningController=null;
@@ -382,6 +391,7 @@ const els = {
   prev24Btn:document.getElementById('prev24Btn'),
   next24Btn:document.getElementById('next24Btn'),
   chartRange:document.getElementById('chartRange'),
+  viewBtns:[...document.querySelectorAll('[data-window-size]')],
   alertsCard:document.getElementById('alertsCard'),
   alertsWrap:document.getElementById('alertsWrap'),
   radarCard:document.getElementById('radarCard'),
@@ -774,6 +784,7 @@ function resetDetail(place){
   hourlyAllFull=[];
   hourlyWindow=[];
   hourlyOffset=0;
+  hourlyWindowSize=24;
 
   els.placeTitle.textContent=place.label||'—';
   els.placeMeta.textContent=`${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz||'—'}`;
@@ -799,6 +810,7 @@ function resetDetail(place){
 
   flags={temp:true,wind:true,pop:false,dew:false};
   document.querySelectorAll('.toggle').forEach(b=>b.classList.toggle('active', !!flags[b.dataset.series]));
+  syncWindowButtons();
 
   updateChartNavButtons();
 }
@@ -944,17 +956,39 @@ function parseMph(str){
   return m.length?Math.max(...m):NaN;
 }
 
+function syncWindowButtons(){
+  els.viewBtns.forEach(btn=>{
+    const size = Number(btn.dataset.windowSize);
+    btn.classList.toggle('active', size===hourlyWindowSize);
+  });
+}
+
+function clampHourlyOffset(){
+  const maxOffset = Math.max(0, hourlyAllFull.length - hourlyWindowSize);
+  hourlyOffset = Math.min(Math.max(0, hourlyOffset), maxOffset);
+}
+
+function updateChartNavLabels(){
+  els.prev24Btn.textContent = `◀︎ Prev ${hourlyWindowSize}`;
+  els.next24Btn.textContent = `Next ${hourlyWindowSize} ▶︎`;
+  els.prev24Btn.title = `Previous ${hourlyWindowSize} hours`;
+  els.next24Btn.title = `Next ${hourlyWindowSize} hours`;
+}
+
 function updateChartWindow(){
+  clampHourlyOffset();
   const start = hourlyOffset;
-  const end = hourlyOffset + 24;
+  const end = hourlyOffset + hourlyWindowSize;
   hourlyWindow = hourlyAllFull.slice(start, end);
   drawHourly(hourlyWindow);
+  syncWindowButtons();
+  updateChartNavLabels();
   updateChartNavButtons();
 
   if(hourlyWindow.length){
     const a = hourlyWindow[0].time;
     const b = hourlyWindow[hourlyWindow.length-1].time;
-    els.chartRange.textContent = `Hours ${hourlyOffset+1}–${Math.min(hourlyOffset+24, hourlyAllFull.length)} • ${a.toLocaleString()} → ${b.toLocaleString()}`;
+    els.chartRange.textContent = `Hours ${hourlyOffset+1}–${Math.min(hourlyOffset+hourlyWindowSize, hourlyAllFull.length)} • ${a.toLocaleString()} → ${b.toLocaleString()}`;
   } else {
     els.chartRange.textContent = '—';
   }
@@ -962,18 +996,29 @@ function updateChartWindow(){
 
 function updateChartNavButtons(){
   els.prev24Btn.disabled = hourlyOffset<=0;
-  els.next24Btn.disabled = (hourlyOffset+24)>=hourlyAllFull.length;
+  els.next24Btn.disabled = (hourlyOffset+hourlyWindowSize)>=hourlyAllFull.length;
+}
+function setHourlyWindowSize(size){
+  if(![4,12,24].includes(size)) return;
+  hourlyWindowSize = size;
+  clampHourlyOffset();
+  updateChartWindow();
 }
 els.prev24Btn.addEventListener('click', ()=>{
-  hourlyOffset = Math.max(0, hourlyOffset-24);
+  hourlyOffset = Math.max(0, hourlyOffset-hourlyWindowSize);
   updateChartWindow();
 },{passive:true});
 els.next24Btn.addEventListener('click', ()=>{
-  if(hourlyOffset+24 < hourlyAllFull.length){
-    hourlyOffset += 24;
+  if(hourlyOffset+hourlyWindowSize < hourlyAllFull.length){
+    hourlyOffset += hourlyWindowSize;
     updateChartWindow();
   }
 },{passive:true});
+els.viewBtns.forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    setHourlyWindowSize(Number(btn.dataset.windowSize));
+  }, {passive:true});
+});
 
 function drawHourly(points){
   const { ctx, W, H } = setupCanvas(); ctx.clearRect(0,0,W,H);
@@ -1182,6 +1227,7 @@ function applyCachedToUI(payload, opts={showBanner:false}){
 
   hourlyAllFull = payload.hourlyAllFull || [];
   hourlyOffset = payload.hourlyOffset || 0;
+  hourlyWindowSize = payload.hourlyWindowSize || 24;
   updateChartWindow();
 
   els.majorTimes.textContent = payload.majorTimes ?? '—';
@@ -1303,6 +1349,7 @@ async function loadAll(place){
     els.hourlyApiLink.href=props.forecastHourly||'#';
     hourlyAllFull=[];
     hourlyOffset=0;
+    hourlyWindowSize=24;
 
     if(props.forecastHourly){
       const hourly=await fetchJson(props.forecastHourly,'application/geo+json',ctl);
@@ -1389,6 +1436,7 @@ function buildSnapshotForCache(place){
 
     hourlyAllFull: hourlyAllFull,
     hourlyOffset: hourlyOffset,
+    hourlyWindowSize: hourlyWindowSize,
 
     majorTimes: els.majorTimes.textContent,
     minorTimes: els.minorTimes.textContent,
@@ -1563,6 +1611,7 @@ async function prefetchPlace(place){
       dailyByKey: built.byKey,
       hourlyAllFull: hourlyFull,
       hourlyOffset: 0,
+      hourlyWindowSize: 24,
       majorTimes: '—',
       minorTimes: '—',
       tides: { visible:false },
