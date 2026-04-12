@@ -1052,6 +1052,17 @@ function drawHourly(points){
   for(let v=Math.ceil(lmin/tStep)*tStep; v<=lmax; v+=tStep){ const yy=yL(v); ctx.moveTo(pad.l,yy); ctx.lineTo(W-pad.r,yy); }
   ctx.stroke();
 
+  if(hourlyWindowSize===4 && points.length>1){
+    ctx.strokeStyle='rgba(230,238,247,0.08)';
+    ctx.beginPath();
+    for(let i=1;i<points.length;i++){
+      const xx=x(i);
+      ctx.moveTo(xx, pad.t);
+      ctx.lineTo(xx, H-pad.b);
+    }
+    ctx.stroke();
+  }
+
   ctx.fillStyle='#9fb3c8'; ctx.font='12px -apple-system, Segoe UI, Roboto, Helvetica, Arial'; ctx.textBaseline='middle';
 
   ctx.textAlign='right';
@@ -1061,10 +1072,16 @@ function drawHourly(points){
   ctx.textAlign='left';
   for(let v=Math.ceil(rmin/rStep)*rStep; v<=rmax; v+=rStep){ ctx.fillText(`${Math.round(v)}`, W-pad.r+8, yR(v)); }
 
-  ctx.textAlign='center'; ctx.textBaseline='top';
-  for(let i=0;i<points.length;i+=4){
-    ctx.fillText(hourLabel24(points[i].time), x(i), H-pad.b+8);
-  }
+  const labelStep = hourlyWindowSize===4 ? 1 : Math.max(1, Math.floor(points.length/6));
+  const labelIndexes = [];
+  for(let i=0;i<points.length;i+=labelStep) labelIndexes.push(i);
+  if(labelIndexes[labelIndexes.length-1] !== points.length-1) labelIndexes.push(points.length-1);
+
+  ctx.textBaseline='top';
+  labelIndexes.forEach((idx, n)=>{
+    ctx.textAlign = idx===0 ? 'left' : (idx===points.length-1 ? 'right' : 'center');
+    ctx.fillText(hourLabel24(points[idx].time), x(idx), H-pad.b+8);
+  });
 
   function drawSeries(getY, color, accessor, dashed=false){
     const vals=points.map(accessor);
