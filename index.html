@@ -355,7 +355,8 @@ const HOURLY_ERROR_INDEX = {
   16: 'Optional extras timed out or failed, but weather loaded anyway.',
   17: 'Safari-style fetch timeout: the browser did not settle the request before the safety timer.',
   18: 'Safari may have returned or held stale cached data, so a fresh request was forced.',
-  19: 'Safari network request stalled, possibly due to Low Power Mode, Private Relay, content blockers, or background tab throttling.'
+  19: 'Safari network request stalled, possibly due to Low Power Mode, Private Relay, content blockers, or background tab throttling.',
+  20: 'NWS rejected the URL as malformed or unsupported, usually because the request URL included a query parameter that the endpoint did not accept.'
 };
 const FETCH_TIMEOUT_MS = 12000;
 let hourlyChartMessage = 'Hourly trend is loading…';
@@ -752,6 +753,7 @@ function makeWxError(code, detail, extra={}){
 function codeForFetchFailure(err){
   if(err?.wxCode) return err.wxCode;
   if(err?.name === 'AbortError') return 10;
+  if(err?.status === 400) return 20;
   if(err?.status === 403) return 3;
   if(err?.status === 429 || (err?.status >= 500 && err?.status <= 599)) return 4;
   if(err instanceof TypeError) return 5;
@@ -760,13 +762,20 @@ function codeForFetchFailure(err){
 function addCacheBuster(url){
   try{
     const u = new URL(url, location.href);
-    if(u.hostname.includes('weather.gov') || u.hostname.includes('noaa.gov') || u.hostname.includes('solunar.org') || u.hostname.includes('sunrise-sunset.org')){
+
+    // NWS/weather.gov endpoints can reject unknown query parameters with HTTP 400.
+    // Use browser cache controls for those requests, but do not alter the URL.
+    if(u.hostname.includes('weather.gov')) return u.toString();
+
+    if(u.hostname.includes('noaa.gov') || u.hostname.includes('solunar.org') || u.hostname.includes('sunrise-sunset.org')){
       u.searchParams.set('_skyscout', String(Date.now()));
     }
     return u.toString();
   }catch{
-    const sep = String(url).includes('?') ? '&' : '?';
-    return `${url}${sep}_skyscout=${Date.now()}`;
+    const raw = String(url);
+    if(raw.includes('weather.gov')) return raw;
+    const sep = raw.includes('?') ? '&' : '?';
+    return `${raw}${sep}_skyscout=${Date.now()}`;
   }
 }
 async function fetchWithTimeout(url, options={}, ctl, timeoutMs=FETCH_TIMEOUT_MS){
@@ -824,9 +833,10 @@ async function fetchJson(url, accept='application/geo+json', ctl, opts={}){
         cache: opts.cache || 'no-store'
       }, ctl, opts.timeoutMs || FETCH_TIMEOUT_MS);
       if(!res.ok){
-        const err = new Error(`HTTP ${res.status} for ${url}`);
+        const actualUrl = res.url || url;
+        const err = new Error(`HTTP ${res.status} for ${actualUrl}`);
         err.status = res.status;
-        err.url = url;
+        err.url = actualUrl;
         throw err;
       }
       return res.json();
