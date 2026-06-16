@@ -346,8 +346,14 @@ const HOURLY_ERROR_INDEX = {
   7: 'NWS hourly response shape changed or was missing expected fields.',
   8: 'Hourly periods were present, but all trend values were invalid.',
   9: 'Cached hourly data was missing or invalid, so it was not allowed to overwrite the visible chart.',
-  10: 'Request was canceled because another location or refresh started.'
+  10: 'Request was canceled because another location or refresh started.',
+  11: 'Request timed out before the server answered.',
+  12: 'Observation station lookup failed, but forecast data may still load.',
+  13: 'Latest observation lookup failed, but forecast data may still load.',
+  14: 'Daily forecast lookup failed, but hourly data may still load.',
+  15: 'Tides, solunar, sunrise, alerts, or radar failed, but weather data loaded.'
 };
+const FETCH_TIMEOUT_MS = 12000;
 let hourlyChartMessage = 'Hourly trend is loading…';
 
 /* Seeds */
@@ -740,11 +746,36 @@ function makeWxError(code, detail, extra={}){
   return err;
 }
 function codeForFetchFailure(err){
+  if(err?.wxCode) return err.wxCode;
   if(err?.name === 'AbortError') return 10;
   if(err?.status === 403) return 3;
   if(err?.status === 429 || (err?.status >= 500 && err?.status <= 599)) return 4;
   if(err instanceof TypeError) return 5;
   return 5;
+}
+async function fetchWithTimeout(url, options={}, ctl, timeoutMs=FETCH_TIMEOUT_MS){
+  if(ctl?.signal?.aborted) throw makeWxError(10);
+
+  const local = new AbortController();
+  let timedOut = false;
+  const parentAbort = ()=>local.abort();
+  const timer = setTimeout(()=>{
+    timedOut = true;
+    local.abort();
+  }, timeoutMs);
+
+  if(ctl?.signal) ctl.signal.addEventListener('abort', parentAbort, { once:true });
+
+  try{
+    return await fetch(url, { ...options, signal: local.signal });
+  }catch(err){
+    if(timedOut) throw makeWxError(11, `Timed out after ${Math.round(timeoutMs/1000)} seconds.`, { url });
+    if(ctl?.signal?.aborted) throw makeWxError(10, '', { url });
+    throw err;
+  }finally{
+    clearTimeout(timer);
+    if(ctl?.signal) ctl.signal.removeEventListener('abort', parentAbort);
+  }
 }
 async function fetchJson(url, accept='application/geo+json', ctl, opts={}){
   const attempts = opts.attempts || 1;
@@ -752,11 +783,10 @@ async function fetchJson(url, accept='application/geo+json', ctl, opts={}){
 
   for(let i=0; i<attempts; i++){
     try{
-      const res=await fetch(url,{
+      const res=await fetchWithTimeout(url, {
         headers:{ Accept:accept },
-        signal:ctl?.signal,
         cache: opts.cache || 'no-store'
-      });
+      }, ctl, opts.timeoutMs || FETCH_TIMEOUT_MS);
       if(!res.ok){
         const err = new Error(`HTTP ${res.status} for ${url}`);
         err.status = res.status;
@@ -766,7 +796,7 @@ async function fetchJson(url, accept='application/geo+json', ctl, opts={}){
       return res.json();
     }catch(err){
       lastErr = err;
-      if(err?.name === 'AbortError') throw err;
+      if(err?.wxCode === 10 || err?.wxCode === 11 || err?.name === 'AbortError') throw err;
       const retryable = err instanceof TypeError || err.status === 429 || (err.status >= 500 && err.status <= 599);
       if(!retryable || i === attempts-1) throw err;
       await sleep(600 * (i+1));
@@ -964,7 +994,7 @@ function dayCardHL(d){
 async function fetchSunTimes(lat, lon, tz, dayKey){
   if(sunCache[dayKey]) return sunCache[dayKey];
   const url = `https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lon}&date=${dayKey}&formatted=0`;
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url, { cache:'no-store' }, null, FETCH_TIMEOUT_MS);
   if(!res.ok) throw new Error('HTTP '+res.status);
   const data = await res.json();
   if(!data || data.status!=='OK' || !data.results) throw new Error('Bad response');
@@ -1272,7 +1302,7 @@ async function loadSolunar(place){
     const ymd = solunarDateYMD(tz, new Date());
     const offset = tzOffsetHours(tz, new Date());
     const url = `https://api.solunar.org/solunar/${place.lat},${place.lon},${ymd},${offset}`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url, { cache:'no-store' }, null, FETCH_TIMEOUT_MS);
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
 
@@ -1385,15 +1415,14 @@ function applyCachedToUI(payload, opts={showBanner:false}){
 async function loadAll(place){
   const ctl=cancelInFlight();
   hideStaleBanner();
-  setStatus('Loading…');
+  setStatus('Loading location from weather.gov…');
   els.refresh.disabled=true;
 
   try{
-    const points=await fetchJson(`https://api.weather.gov/points/${place.lat},${place.lon}`,'application/geo+json',ctl);
+    const points=await fetchJson(`https://api.weather.gov/points/${place.lat},${place.lon}`,'application/geo+json',ctl,{attempts:2});
     const props=points.properties||{};
     const rel=props.relativeLocation?.properties;
 
-    // Elevation from points API (meters)
     const elevM = (props.elevation && typeof props.elevation.value === 'number') ? props.elevation.value : null;
     const elevFt = (elevM!=null) ? Math.round(metersToFeet(elevM)) : null;
     const elevTxt = (elevFt!=null) ? ` • Elev ${elevFt.toLocaleString()} ft` : '';
@@ -1409,25 +1438,40 @@ async function loadAll(place){
     }
     updateSaveButtons();
 
+    setStatus('Loading alerts…');
     try{
       const alertData = await fetchActiveAlerts(place, true, ctl);
       renderAlertDetails(alertData.alerts || []);
       const savedCard = els.savedList.querySelector(`.choice[data-key="${CSS.escape(place.key)}"]`);
       paintSavedAlertState(savedCard, alertData);
-    }catch{
+    }catch(err){
       renderAlertDetails((getAlertCache(place.key)?.alerts) || []);
     }
 
-    const stations=await fetchJson(props.observationStations,'application/geo+json',ctl);
-    const s0=stations.features?.[0];
-    const stationId=s0?.properties?.stationIdentifier || s0?.id?.split('/').pop();
-    els.station.textContent=s0?.properties?.name || stationId || '—';
+    setStatus('Loading current conditions…');
+    let lp = {};
+    try{
+      if(!props.observationStations) throw makeWxError(12, 'No observationStations URL was provided.');
+      const stations=await fetchJson(props.observationStations,'application/geo+json',ctl,{attempts:2});
+      const s0=stations.features?.[0];
+      const stationId=s0?.properties?.stationIdentifier || s0?.id?.split('/').pop();
+      els.station.textContent=s0?.properties?.name || stationId || '—';
+      if(!stationId) throw makeWxError(12, 'No usable station ID was returned.');
 
-    const latestUrl=`https://api.weather.gov/stations/${stationId}/observations/latest?require_qc=true`;
-    els.obsApiLink.href=latestUrl;
+      const latestUrl=`https://api.weather.gov/stations/${stationId}/observations/latest?require_qc=true`;
+      els.obsApiLink.href=latestUrl;
 
-    const latest=await fetchJson(latestUrl,'application/geo+json',ctl);
-    const lp=latest.properties||{};
+      try{
+        const latest=await fetchJson(latestUrl,'application/geo+json',ctl,{attempts:2});
+        lp=latest.properties||{};
+      }catch(err){
+        throw makeWxError(13, err.status ? `(HTTP ${err.status})` : err.message);
+      }
+    }catch(err){
+      const code = err.wxCode || 12;
+      els.station.textContent = els.station.textContent || '—';
+      setStatus(`Current conditions unavailable. Error code ${code}. Continuing forecast load…`, 'err');
+    }
 
     let tempC=(lp.temperature&&typeof lp.temperature.value==='number')?lp.temperature.value:null;
     let dewC=(lp.dewpoint&&typeof lp.dewpoint.value==='number')?lp.dewpoint.value:null;
@@ -1435,65 +1479,50 @@ async function loadAll(place){
     let windMs=(lp.windSpeed&&typeof lp.windSpeed.value==='number')?lp.windSpeed.value:null;
     const windMph = Number.isFinite(windMs)? ms2mph(windMs): NaN;
 
-    if(tempC==null){
-      const recent=await fetchJson(`https://api.weather.gov/stations/${stationId}/observations?limit=5`,'application/geo+json',ctl);
-      const withTemp=recent.features?.find(f=>f?.properties?.temperature?.value!=null);
-      if(withTemp) tempC=withTemp.properties.temperature.value;
-    }
-
     if(tempC!=null){ els.temp.textContent=`${Math.round((tempC*9/5)+32)}`; els.unit.textContent='°F'; }
     els.observed.textContent = lp.timestamp ? new Date(lp.timestamp).toLocaleString() : 'Observed —';
     els.condText.textContent = lp.textDescription || '—';
-
     els.ccHumidity.textContent = Number.isFinite(rh) ? `${Math.round(rh)}%` : '—';
     els.ccWind.textContent = Number.isFinite(windMph) ? `${Math.round(windMph)} mph${lp.windDirection && lp.windDirection.value!=null ? ' '+degToCardinal(lp.windDirection.value) : ''}` : '—';
     els.ccDew.textContent = Number.isFinite(dewC) ? `${Math.round((dewC*9/5)+32)}°F` : '—';
-
     const tempF = Number.isFinite(tempC) ? (tempC*9/5+32) : NaN;
     const chill = Number.isFinite(tempF)&&Number.isFinite(windMph) ? fWindChill(tempF, windMph) : null;
     els.ccChill.textContent = (chill!=null) ? `${chill}°F` : '—';
 
+    setStatus('Loading 7-day forecast…');
     els.dailyApiLink.href=props.forecast||'#';
     els.days.innerHTML='';
     dailyByKey={};
-
-    if(props.forecast){
-      const daily=await fetchJson(props.forecast,'application/geo+json',ctl);
+    try{
+      if(!props.forecast) throw makeWxError(14, 'No daily forecast URL was provided.');
+      const daily=await fetchJson(props.forecast,'application/geo+json',ctl,{attempts:2});
       const periods = daily.properties?.periods || [];
       const built = buildLocal7Day(periods, place.tz || 'UTC');
       dailyByKey = built.byKey;
       if(built.arr[0]?.icon) latestDailyIconUrl = built.arr[0].icon;
-
       built.arr.forEach(d=>{
         const card = dayCardHL(d);
         card.addEventListener('click', ()=>openDayDetail(d.key));
         els.days.appendChild(card);
       });
+    }catch(err){
+      setStatus(`7-day forecast unavailable. Error code 14. Continuing hourly load…`, 'err');
     }
 
     els.condIcon.src = (lp.icon || '') || latestDailyIconUrl || '';
 
-    try{
-      const tz = place.tz || 'UTC';
-      const todayKey = dayKeyInTZ(new Date(), tz);
-      const sun = await fetchSunTimes(place.lat, place.lon, tz, todayKey);
-      els.sunTimes.textContent = formatSunTimesText(tz, sun);
-    }catch{
-      els.sunTimes.textContent = 'Sunrise — • Sunset —';
-    }
-
+    setStatus('Loading hourly trend…');
     els.hourlyApiLink.href=props.forecastHourly||'#';
     hourlyOffset=0;
     hourlyWindowSize=24;
-
     try{
       if(!props.forecastHourly) throw makeWxError(2);
-      const hourly=await fetchJson(props.forecastHourly,'application/geo+json',ctl,{attempts:3});
+      const hourly=await fetchJson(props.forecastHourly,'application/geo+json',ctl,{attempts:3, timeoutMs:FETCH_TIMEOUT_MS});
       hourlyAllFull = hourlyPeriodsToPoints(hourly?.properties?.periods);
       hourlyChartMessage = '';
       updateChartWindow();
     }catch(err){
-      if(err?.name === 'AbortError') throw err;
+      if(err?.wxCode === 10 || err?.name === 'AbortError') throw err;
       const code = err.wxCode || codeForFetchFailure(err);
       setHourlyChartMessage(code, err.status ? `(HTTP ${err.status})` : '');
       const cachedHourly = normalizeHourlyPoints(getCache(currentPlaceKey)?.hourlyAllFull || []);
@@ -1507,19 +1536,31 @@ async function loadAll(place){
       updateChartWindow();
     }
 
-    await loadSolunar(place);
-    await loadTidesIfCoastal(place.lat, place.lon, place.tz);
+    setStatus('Loading sunrise and extras…');
+    try{
+      const tz = place.tz || 'UTC';
+      const todayKey = dayKeyInTZ(new Date(), tz);
+      const sun = await fetchSunTimes(place.lat, place.lon, tz, todayKey);
+      els.sunTimes.textContent = formatSunTimesText(tz, sun);
+    }catch{
+      els.sunTimes.textContent = 'Sunrise — • Sunset —';
+    }
+
+    await Promise.allSettled([
+      loadSolunar(place),
+      loadTidesIfCoastal(place.lat, place.lon, place.tz)
+    ]);
 
     const snap = buildSnapshotForCache(place);
     setCache(currentPlaceKey, snap);
     ensureRadarMap(place);
 
     hideStaleBanner();
-    setStatus('Live data loaded.','ok');
+    setStatus(hourlyAllFull.length ? 'Live data loaded.' : 'Live data loaded, but hourly trend is unavailable. See chart error code.','ok');
     return true;
 
   }catch(e){
-    if(e.name==='AbortError') return false;
+    if(e.name==='AbortError' || e.wxCode===10) return false;
 
     const cached = getCache(currentPlaceKey);
     if(cached){
@@ -1528,7 +1569,7 @@ async function loadAll(place){
     }
     const code = e.wxCode || codeForFetchFailure(e);
     setHourlyChartMessage(code, e.status ? `(HTTP ${e.status})` : '');
-    setStatus(`Unable to load. Error code ${code}: ${e.message}`,'err');
+    setStatus(`Unable to load live weather. Error code ${code}: ${e.message}`,'err');
     return false;
   }finally{
     els.refresh.disabled=false;
@@ -1588,7 +1629,9 @@ async function loadTidesIfCoastal(lat, lon, tz){
   try{
     const pad = 0.8;
     const bbox = `${(lon-pad).toFixed(3)},${(lat-pad).toFixed(3)},${(lon+pad).toFixed(3)},${(lat+pad).toFixed(3)}`;
-    const meta = await fetch(`https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels&bbox=${bbox}`).then(r=>r.json());
+    const metaRes = await fetchWithTimeout(`https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels&bbox=${bbox}`, { cache:'no-store' }, null, FETCH_TIMEOUT_MS);
+    if(!metaRes.ok) throw new Error('HTTP '+metaRes.status);
+    const meta = await metaRes.json();
     const stations = (meta?.stations||[])
       .map(s=>({ id: s.id || s.stationId || s.station_id, name: s.name, lat: +s.lat, lon: +s.lng || +s.lon }))
       .filter(s=>isFinite(s.lat)&&isFinite(s.lon));
@@ -1605,7 +1648,9 @@ async function loadTidesIfCoastal(lat, lon, tz){
     const end   = new Date(today.getTime()+3*24*3600*1000);
     const fmt = (d)=>`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
     const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&begin_date=${fmt(today)}&end_date=${fmt(end)}&datum=MLLW&station=${best.id}&time_zone=lst_ldt&units=english&interval=hilo&format=json`;
-    const pred = await fetch(url).then(r=>r.json());
+    const predRes = await fetchWithTimeout(url, { cache:'no-store' }, null, FETCH_TIMEOUT_MS);
+    if(!predRes.ok) throw new Error('HTTP '+predRes.status);
+    const pred = await predRes.json();
     const arr = pred?.predictions||[];
 
     const byDate = new Map();
