@@ -336,6 +336,20 @@ const ALERT_CACHE_KEY='wx.alerts.v1';
 const ALERT_CACHE_TTL_MS=10*60*1000;
 const IEM_WMS_URL='https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0q.cgi';
 
+const HOURLY_ERROR_INDEX = {
+  1: 'NWS points lookup failed, so the hourly forecast URL could not be discovered.',
+  2: 'NWS did not provide a forecastHourly URL for this location.',
+  3: 'NWS rejected the hourly request with HTTP 403 Forbidden.',
+  4: 'NWS temporarily throttled or failed the hourly request with HTTP 429/5xx.',
+  5: 'The browser could not reach NWS hourly data because of network, offline, DNS, or CORS failure.',
+  6: 'NWS hourly response had no forecast periods.',
+  7: 'NWS hourly response shape changed or was missing expected fields.',
+  8: 'Hourly periods were present, but all trend values were invalid.',
+  9: 'Cached hourly data was missing or invalid, so it was not allowed to overwrite the visible chart.',
+  10: 'Request was canceled because another location or refresh started.'
+};
+let hourlyChartMessage = 'Hourly trend is loading…';
+
 /* Seeds */
 const SEEDS = [
   { key:'queencreek', label:'Queen Creek, AZ', lat:33.2425, lon:-111.6343, tz:'America/Phoenix' },
@@ -718,10 +732,86 @@ function guessTZ(stateAbbr, lat, lon){
 }
 function setStatus(text, cls){ els.status.textContent=text; els.status.className='status '+(cls||''); }
 
-async function fetchJson(url, accept='application/geo+json', ctl){
-  const res=await fetch(url,{headers:{Accept:accept},signal:ctl?.signal});
-  if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return res.json();
+function sleep(ms){ return new Promise(resolve=>setTimeout(resolve, ms)); }
+function makeWxError(code, detail, extra={}){
+  const err = new Error(`Error code ${code}: ${HOURLY_ERROR_INDEX[code]}${detail ? ` ${detail}` : ''}`);
+  err.wxCode = code;
+  Object.assign(err, extra);
+  return err;
+}
+function codeForFetchFailure(err){
+  if(err?.name === 'AbortError') return 10;
+  if(err?.status === 403) return 3;
+  if(err?.status === 429 || (err?.status >= 500 && err?.status <= 599)) return 4;
+  if(err instanceof TypeError) return 5;
+  return 5;
+}
+async function fetchJson(url, accept='application/geo+json', ctl, opts={}){
+  const attempts = opts.attempts || 1;
+  let lastErr = null;
+
+  for(let i=0; i<attempts; i++){
+    try{
+      const res=await fetch(url,{
+        headers:{ Accept:accept },
+        signal:ctl?.signal,
+        cache: opts.cache || 'no-store'
+      });
+      if(!res.ok){
+        const err = new Error(`HTTP ${res.status} for ${url}`);
+        err.status = res.status;
+        err.url = url;
+        throw err;
+      }
+      return res.json();
+    }catch(err){
+      lastErr = err;
+      if(err?.name === 'AbortError') throw err;
+      const retryable = err instanceof TypeError || err.status === 429 || (err.status >= 500 && err.status <= 599);
+      if(!retryable || i === attempts-1) throw err;
+      await sleep(600 * (i+1));
+    }
+  }
+  throw lastErr;
+}
+function normalizeHourlyPoints(rawPoints){
+  return (rawPoints||[]).map(p=>({
+    ...p,
+    time: p?.time instanceof Date ? p.time : new Date(p?.time)
+  })).filter(p=>p.time instanceof Date && !isNaN(p.time) && (
+    Number.isFinite(p.temp) || Number.isFinite(p.wind) || Number.isFinite(p.pop) || Number.isFinite(p.dew)
+  ));
+}
+function hourlyPeriodsToPoints(periods){
+  if(!Array.isArray(periods)) throw makeWxError(7, 'Expected properties.periods to be an array.');
+  if(!periods.length) throw makeWxError(6, 'The hourly periods array was empty.');
+
+  const points = periods.slice(0,72).map(p=>{
+    const rawTemp = Number(p.temperature);
+    const tF = Number.isFinite(rawTemp) ? (p.temperatureUnit==='F' ? rawTemp : Math.round((rawTemp*9/5)+32)) : NaN;
+    const w=parseMph(p.windSpeed);
+    const pop=(p.probabilityOfPrecipitation && typeof p.probabilityOfPrecipitation.value==='number')? p.probabilityOfPrecipitation.value : NaN;
+    const dewC2=(p.dewpoint && typeof p.dewpoint.value==='number')? p.dewpoint.value : NaN;
+    const dewF=Number.isFinite(dewC2)? Math.round((dewC2*9/5)+32) : NaN;
+
+    return {
+      time:new Date(p.startTime),
+      temp:tF,
+      wind:isNaN(w)?NaN:w,
+      windDir:p.windDirection||'',
+      pop:pop,
+      dew:dewF
+    };
+  });
+
+  const normalized = normalizeHourlyPoints(points);
+  if(!normalized.length) throw makeWxError(8, 'No valid temp, wind, precipitation, or dewpoint values were found.');
+  return normalized;
+}
+function setHourlyChartMessage(code, detail=''){
+  const base = HOURLY_ERROR_INDEX[code] || 'Hourly trend data is unavailable.';
+  hourlyChartMessage = `Error code ${code}: ${base}${detail ? ` ${detail}` : ''}`;
+  els.chartRange.textContent = hourlyChartMessage;
 }
 function cancelInFlight(){
   if(runningController) try{runningController.abort()}catch{}
@@ -785,6 +875,7 @@ function resetDetail(place){
   hourlyWindow=[];
   hourlyOffset=0;
   hourlyWindowSize=24;
+  hourlyChartMessage = 'Hourly trend is loading…';
 
   els.placeTitle.textContent=place.label||'—';
   els.placeMeta.textContent=`${Number(place.lat).toFixed(4)}, ${Number(place.lon).toFixed(4)} • ${place.tz||'—'}`;
@@ -1027,6 +1118,21 @@ function drawHourly(points){
 
   if(!points||points.length===0){
     ctx.strokeStyle='rgba(230,238,247,0.12)'; ctx.beginPath(); ctx.moveTo(pad.l,H-pad.b); ctx.lineTo(W-pad.r,H-pad.b); ctx.stroke();
+    ctx.fillStyle='#9fb3c8';
+    ctx.font='14px -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    const msg = hourlyChartMessage || 'Hourly trend data is unavailable.';
+    const words = msg.split(' ');
+    const lines = [];
+    let line = '';
+    for(const word of words){
+      const test = line ? `${line} ${word}` : word;
+      if(ctx.measureText(test).width > Math.max(260, W-80) && line){ lines.push(line); line = word; }
+      else line = test;
+    }
+    if(line) lines.push(line);
+    lines.slice(0,3).forEach((txt,i)=>ctx.fillText(txt, W/2, H/2 + (i-(Math.min(lines.length,3)-1)/2)*20));
     hourlyPlotState={x:()=>0,points:[]}; return;
   }
 
@@ -1242,10 +1348,23 @@ function applyCachedToUI(payload, opts={showBanner:false}){
     });
   }
 
-  hourlyAllFull = payload.hourlyAllFull || [];
-  hourlyOffset = payload.hourlyOffset || 0;
-  hourlyWindowSize = payload.hourlyWindowSize || 24;
-  updateChartWindow();
+  const cachedHourly = normalizeHourlyPoints(payload.hourlyAllFull || []);
+  if(cachedHourly.length){
+    hourlyAllFull = cachedHourly;
+    hourlyOffset = payload.hourlyOffset || 0;
+    hourlyWindowSize = payload.hourlyWindowSize || 24;
+    hourlyChartMessage = opts.showBanner ? 'Showing cached hourly trend data.' : '';
+    updateChartWindow();
+  } else if(hourlyAllFull.length){
+    setHourlyChartMessage(9, 'Keeping the last visible hourly trend instead.');
+    updateChartWindow();
+  } else {
+    hourlyAllFull = [];
+    hourlyOffset = 0;
+    hourlyWindowSize = payload.hourlyWindowSize || 24;
+    setHourlyChartMessage(9);
+    updateChartWindow();
+  }
 
   els.majorTimes.textContent = payload.majorTimes ?? '—';
   els.minorTimes.textContent = payload.minorTimes ?? '—';
@@ -1364,33 +1483,27 @@ async function loadAll(place){
     }
 
     els.hourlyApiLink.href=props.forecastHourly||'#';
-    hourlyAllFull=[];
     hourlyOffset=0;
     hourlyWindowSize=24;
 
-    if(props.forecastHourly){
-      const hourly=await fetchJson(props.forecastHourly,'application/geo+json',ctl);
-      const h=(hourly.properties?.periods||[]).slice(0,72);
-
-      hourlyAllFull = h.map(p=>{
-        const tF=p.temperatureUnit==='F'?p.temperature:Math.round((p.temperature*9/5)+32);
-        const w=parseMph(p.windSpeed);
-        const pop=(p.probabilityOfPrecipitation && typeof p.probabilityOfPrecipitation.value==='number')? p.probabilityOfPrecipitation.value : NaN;
-        const dewC2=(p.dewpoint && typeof p.dewpoint.value==='number')? p.dewpoint.value : NaN;
-        const dewF=Number.isFinite(dewC2)? Math.round((dewC2*9/5)+32) : NaN;
-
-        return {
-          time:new Date(p.startTime),
-          temp:tF,
-          wind:isNaN(w)?NaN:w,
-          windDir:p.windDirection||'',
-          pop:pop,
-          dew:dewF
-        };
-      });
-
+    try{
+      if(!props.forecastHourly) throw makeWxError(2);
+      const hourly=await fetchJson(props.forecastHourly,'application/geo+json',ctl,{attempts:3});
+      hourlyAllFull = hourlyPeriodsToPoints(hourly?.properties?.periods);
+      hourlyChartMessage = '';
       updateChartWindow();
-    } else {
+    }catch(err){
+      if(err?.name === 'AbortError') throw err;
+      const code = err.wxCode || codeForFetchFailure(err);
+      setHourlyChartMessage(code, err.status ? `(HTTP ${err.status})` : '');
+      const cachedHourly = normalizeHourlyPoints(getCache(currentPlaceKey)?.hourlyAllFull || []);
+      if(cachedHourly.length){
+        hourlyAllFull = cachedHourly;
+        hourlyOffset = 0;
+        hourlyChartMessage = `Error code ${code}: live hourly data failed, so cached hourly trend is showing.`;
+      } else {
+        hourlyAllFull = [];
+      }
       updateChartWindow();
     }
 
@@ -1413,7 +1526,9 @@ async function loadAll(place){
       applyCachedToUI(cached, {showBanner:true});
       showStaleBanner(cached.updatedAt);
     }
-    setStatus(`Unable to load: ${e.message}`,'err');
+    const code = e.wxCode || codeForFetchFailure(e);
+    setHourlyChartMessage(code, e.status ? `(HTTP ${e.status})` : '');
+    setStatus(`Unable to load. Error code ${code}: ${e.message}`,'err');
     return false;
   }finally{
     els.refresh.disabled=false;
@@ -1588,15 +1703,10 @@ async function prefetchPlace(place){
     const dailyPeriods = daily?.properties?.periods || [];
     const built = buildLocal7Day(dailyPeriods, place.tz||'UTC');
 
-    const hourlyPeriods = (hourly?.properties?.periods||[]).slice(0,72);
-    const hourlyFull = hourlyPeriods.map(p=>{
-      const tF=p.temperatureUnit==='F'?p.temperature:Math.round((p.temperature*9/5)+32);
-      const w=parseMph(p.windSpeed);
-      const pop=(p.probabilityOfPrecipitation && typeof p.probabilityOfPrecipitation.value==='number')? p.probabilityOfPrecipitation.value : NaN;
-      const dewC2=(p.dewpoint && typeof p.dewpoint.value==='number')? p.dewpoint.value : NaN;
-      const dewF=Number.isFinite(dewC2)? Math.round((dewC2*9/5)+32) : NaN;
-      return { time:new Date(p.startTime), temp:tF, wind:isNaN(w)?NaN:w, windDir:p.windDirection||'', pop:pop, dew:dewF };
-    });
+    let hourlyFull = [];
+    try{
+      hourlyFull = hourlyPeriodsToPoints(hourly?.properties?.periods || []);
+    }catch{}
 
     const tz = place.tz || 'UTC';
     const todayKey = dayKeyInTZ(new Date(), tz);
