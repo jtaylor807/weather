@@ -160,7 +160,7 @@
       <div id="zipMsg" class="muted" style="margin-top:8px;font-size:13px">Enter a ZIP or city + state. ZIP + city/state use Zippopotam.us; “Your location” uses your device GPS.</div>
     </div>
     <div class="muted" style="margin-top:10px">
-      Weather: National Weather Service (api.weather.gov). Tides: NOAA CO-OPS (api.tidesandcurrents.noaa.gov). Solunar: Solunar.org API. Sunrise/Sunset: sunrise-sunset.org.
+      Weather: National Weather Service (api.weather.gov). Tides: NOAA CO-OPS (api.tidesandcurrents.noaa.gov). Sunrise/Sunset: sunrise-sunset.org.
     </div>
   </div>
 
@@ -296,16 +296,6 @@
       <div id="tideGrid" class="tideGrid"></div>
     </div>
 
-    <!-- SOLUNAR -->
-    <div class="card">
-      <h2 style="margin:0 0 8px">Major / Minor Lunar Times (Today)</h2>
-      <div class="grid-2">
-        <div class="pill"><div><strong>Major</strong></div><div id="majorTimes" class="muted">—</div></div>
-        <div class="pill"><div><strong>Minor</strong></div><div id="minorTimes" class="muted">—</div></div>
-      </div>
-      <div class="muted" style="margin-top:8px;font-size:13px">Local times from Solunar.org for the selected place’s time zone.</div>
-    </div>
-
     <div class="status" id="status">—</div>
   </div>
 </div>
@@ -346,19 +336,8 @@ const HOURLY_ERROR_INDEX = {
   7: 'NWS hourly response shape changed or was missing expected fields.',
   8: 'Hourly periods were present, but all trend values were invalid.',
   9: 'Cached hourly data was missing or invalid, so it was not allowed to overwrite the visible chart.',
-  10: 'Request was canceled because another location or refresh started.',
-  11: 'Request timed out before the server answered.',
-  12: 'Observation station lookup failed, but forecast data may still load.',
-  13: 'Latest observation lookup failed, but forecast data may still load.',
-  14: 'Daily forecast lookup failed, but hourly data may still load.',
-  15: 'Tides, solunar, sunrise, alerts, or radar failed, but weather data loaded.',
-  16: 'Optional extras timed out or failed, but weather loaded anyway.',
-  17: 'Safari-style fetch timeout: the browser did not settle the request before the safety timer.',
-  18: 'Safari may have returned or held stale cached data, so a fresh request was forced.',
-  19: 'Safari network request stalled, possibly due to Low Power Mode, Private Relay, content blockers, or background tab throttling.',
-  20: 'NWS rejected the URL as malformed or unsupported, usually because the request URL included a query parameter that the endpoint did not accept.'
+  10: 'Request was canceled because another location or refresh started.'
 };
-const FETCH_TIMEOUT_MS = 12000;
 let hourlyChartMessage = 'Hourly trend is loading…';
 
 /* Seeds */
@@ -390,8 +369,6 @@ const els = {
   obsApiLink:document.getElementById('obsApiLink'),
   dailyApiLink:document.getElementById('dailyApiLink'),
   hourlyApiLink:document.getElementById('hourlyApiLink'),
-  majorTimes:document.getElementById('majorTimes'),
-  minorTimes:document.getElementById('minorTimes'),
   zipForm:document.getElementById('zipForm'),
   zipInput:document.getElementById('zipInput'),
   cityInput:document.getElementById('cityInput'),
@@ -751,76 +728,11 @@ function makeWxError(code, detail, extra={}){
   return err;
 }
 function codeForFetchFailure(err){
-  if(err?.wxCode) return err.wxCode;
   if(err?.name === 'AbortError') return 10;
-  if(err?.status === 400) return 20;
   if(err?.status === 403) return 3;
   if(err?.status === 429 || (err?.status >= 500 && err?.status <= 599)) return 4;
   if(err instanceof TypeError) return 5;
   return 5;
-}
-function addCacheBuster(url){
-  try{
-    const u = new URL(url, location.href);
-
-    // NWS/weather.gov endpoints can reject unknown query parameters with HTTP 400.
-    // Use browser cache controls for those requests, but do not alter the URL.
-    if(u.hostname.includes('weather.gov')) return u.toString();
-
-    if(u.hostname.includes('noaa.gov') || u.hostname.includes('solunar.org') || u.hostname.includes('sunrise-sunset.org')){
-      u.searchParams.set('_skyscout', String(Date.now()));
-    }
-    return u.toString();
-  }catch{
-    const raw = String(url);
-    if(raw.includes('weather.gov')) return raw;
-    const sep = raw.includes('?') ? '&' : '?';
-    return `${raw}${sep}_skyscout=${Date.now()}`;
-  }
-}
-async function fetchWithTimeout(url, options={}, ctl, timeoutMs=FETCH_TIMEOUT_MS){
-  if(ctl?.signal?.aborted) throw makeWxError(10);
-
-  const local = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-  let settled = false;
-  let timeoutId = null;
-  let parentAbort = null;
-  const finalUrl = options.cache === 'no-store' ? addCacheBuster(url) : url;
-
-  const fetchOptions = {
-    ...options,
-    cache: options.cache || 'no-store'
-  };
-  if(local) fetchOptions.signal = local.signal;
-
-  const fetchPromise = fetch(finalUrl, fetchOptions).then(res=>{
-    settled = true;
-    return res;
-  }).catch(err=>{
-    settled = true;
-    if(ctl?.signal?.aborted) throw makeWxError(10, '', { url: finalUrl });
-    throw err;
-  });
-
-  const timeoutPromise = new Promise((_, reject)=>{
-    timeoutId = setTimeout(()=>{
-      if(local){ try{ local.abort(); }catch{} }
-      reject(makeWxError(17, `Timed out after ${Math.round(timeoutMs/1000)} seconds.`, { url: finalUrl }));
-    }, timeoutMs);
-  });
-
-  if(ctl?.signal && local){
-    parentAbort = ()=>{ try{ local.abort(); }catch{} };
-    ctl.signal.addEventListener('abort', parentAbort, { once:true });
-  }
-
-  try{
-    return await Promise.race([fetchPromise, timeoutPromise]);
-  }finally{
-    clearTimeout(timeoutId);
-    if(ctl?.signal && parentAbort) ctl.signal.removeEventListener('abort', parentAbort);
-    if(!settled && local){ setTimeout(()=>{ try{ local.abort(); }catch{} }, 0); }
-  }
 }
 async function fetchJson(url, accept='application/geo+json', ctl, opts={}){
   const attempts = opts.attempts || 1;
@@ -828,21 +740,21 @@ async function fetchJson(url, accept='application/geo+json', ctl, opts={}){
 
   for(let i=0; i<attempts; i++){
     try{
-      const res=await fetchWithTimeout(url, {
+      const res=await fetch(url,{
         headers:{ Accept:accept },
+        signal:ctl?.signal,
         cache: opts.cache || 'no-store'
-      }, ctl, opts.timeoutMs || FETCH_TIMEOUT_MS);
+      });
       if(!res.ok){
-        const actualUrl = res.url || url;
-        const err = new Error(`HTTP ${res.status} for ${actualUrl}`);
+        const err = new Error(`HTTP ${res.status} for ${url}`);
         err.status = res.status;
-        err.url = actualUrl;
+        err.url = url;
         throw err;
       }
       return res.json();
     }catch(err){
       lastErr = err;
-      if(err?.wxCode === 10 || err?.name === 'AbortError') throw err;
+      if(err?.name === 'AbortError') throw err;
       const retryable = err instanceof TypeError || err.status === 429 || (err.status >= 500 && err.status <= 599);
       if(!retryable || i === attempts-1) throw err;
       await sleep(600 * (i+1));
@@ -926,13 +838,10 @@ function openDetail(key, place){
     if(freshArrived) return;
     if(currentPlaceKey !== openKey) return;
     const cached = getCache(openKey);
-    const mainDataVisible = hourlyAllFull.length || els.days.children.length || els.temp.textContent !== '—';
-    if(cached && !mainDataVisible){
+    if(cached){
       applyCachedToUI(cached, {showBanner:true});
       showStaleBanner(cached.updatedAt);
       setStatus('Showing cached data while waiting for live refresh…','err');
-    } else if(!mainDataVisible){
-      setStatus('Still waiting for live refresh. Safari may be stalling the network request.','err');
     }
   }, 10000);
 
@@ -967,8 +876,6 @@ function resetDetail(place){
   drawHourly([]);
   els.chartRange.textContent='—';
 
-  els.majorTimes.textContent='—';
-  els.minorTimes.textContent='—';
 
   els.obsApiLink.href=els.dailyApiLink.href=els.hourlyApiLink.href='#';
   setStatus('Loading…');
@@ -1043,7 +950,7 @@ function dayCardHL(d){
 async function fetchSunTimes(lat, lon, tz, dayKey){
   if(sunCache[dayKey]) return sunCache[dayKey];
   const url = `https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lon}&date=${dayKey}&formatted=0`;
-  const res = await fetchWithTimeout(url, { cache:'no-store' }, null, FETCH_TIMEOUT_MS);
+  const res = await fetch(url);
   if(!res.ok) throw new Error('HTTP '+res.status);
   const data = await res.json();
   if(!data || data.status!=='OK' || !data.results) throw new Error('Bad response');
@@ -1328,48 +1235,6 @@ function getCSS(name, fallback){ return getComputedStyle(document.documentElemen
   });
 })();
 
-/* =================== Solunar via solunar.org API =================== */
-function solunarDateYMD(tz, date=new Date()){
-  const parts = new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'})
-    .formatToParts(date).reduce((acc,p)=>{acc[p.type]=p.value;return acc;}, {});
-  return `${parts.year}${parts.month}${parts.day}`;
-}
-function tzOffsetHours(tz, date=new Date()){
-  try{
-    const fmt = new Intl.DateTimeFormat('en-US',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
-    const parts = fmt.formatToParts(date).reduce((acc,p)=>{acc[p.type]=p.value;return acc;}, {});
-    const asUTC = Date.UTC(+parts.year, +parts.month-1, +parts.day, +parts.hour, +parts.minute, +parts.second);
-    const diffHours = (asUTC - date.getTime()) / 3600000;
-    return Math.round(diffHours);
-  }catch{
-    return -Math.round(date.getTimezoneOffset()/60);
-  }
-}
-async function loadSolunar(place){
-  try{
-    const tz = place.tz || 'UTC';
-    const ymd = solunarDateYMD(tz, new Date());
-    const offset = tzOffsetHours(tz, new Date());
-    const url = `https://api.solunar.org/solunar/${place.lat},${place.lon},${ymd},${offset}`;
-    const res = await fetchWithTimeout(url, { cache:'no-store' }, null, FETCH_TIMEOUT_MS);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-
-    const majors = [];
-    if(data.major1Start && data.major1Stop) majors.push(`${data.major1Start}–${data.major1Stop}`);
-    if(data.major2Start && data.major2Stop) majors.push(`${data.major2Start}–${data.major2Stop}`);
-    els.majorTimes.textContent = majors.length ? majors.join(' · ') : '—';
-
-    const minors = [];
-    if(data.minor1Start && data.minor1Stop) minors.push(`${data.minor1Start}–${data.minor1Stop}`);
-    if(data.minor2Start && data.minor2Stop) minors.push(`${data.minor2Start}–${data.minor2Stop}`);
-    els.minorTimes.textContent = minors.length ? minors.join(' · ') : '—';
-  }catch{
-    els.majorTimes.textContent='—';
-    els.minorTimes.textContent='—';
-  }
-}
-
 /* =================== Utilities =================== */
 function haversineMi(lat1,lon1,lat2,lon2){
   const R=3958.7613;
@@ -1445,8 +1310,6 @@ function applyCachedToUI(payload, opts={showBanner:false}){
     updateChartWindow();
   }
 
-  els.majorTimes.textContent = payload.majorTimes ?? '—';
-  els.minorTimes.textContent = payload.minorTimes ?? '—';
 
   if(payload.tides && payload.tides.visible){
     els.tidesCard.style.display='';
@@ -1586,20 +1449,14 @@ async function loadAll(place){
       updateChartWindow();
     }
 
+    await loadTidesIfCoastal(place.lat, place.lon, place.tz);
+
     const snap = buildSnapshotForCache(place);
     setCache(currentPlaceKey, snap);
     ensureRadarMap(place);
 
     hideStaleBanner();
-    setStatus('Live weather and hourly trend loaded. Extras are updating separately.','ok');
-
-    loadSolunar(place).then(()=>{
-      if(currentPlaceKey === place.key) setCache(currentPlaceKey, buildSnapshotForCache(place));
-    }).catch(()=>{});
-    loadTidesIfCoastal(place.lat, place.lon, place.tz).then(()=>{
-      if(currentPlaceKey === place.key) setCache(currentPlaceKey, buildSnapshotForCache(place));
-    }).catch(()=>{});
-
+    setStatus('Live data loaded.','ok');
     return true;
 
   }catch(e){
@@ -1654,9 +1511,6 @@ function buildSnapshotForCache(place){
     hourlyOffset: hourlyOffset,
     hourlyWindowSize: hourlyWindowSize,
 
-    majorTimes: els.majorTimes.textContent,
-    minorTimes: els.minorTimes.textContent,
-
     tides: {
       visible: els.tidesCard.style.display !== 'none',
       label: els.tideStationLbl.textContent,
@@ -1672,9 +1526,7 @@ async function loadTidesIfCoastal(lat, lon, tz){
   try{
     const pad = 0.8;
     const bbox = `${(lon-pad).toFixed(3)},${(lat-pad).toFixed(3)},${(lon+pad).toFixed(3)},${(lat+pad).toFixed(3)}`;
-    const metaRes = await fetchWithTimeout(`https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels&bbox=${bbox}`, { cache:'no-store' }, null, FETCH_TIMEOUT_MS);
-    if(!metaRes.ok) throw new Error('HTTP '+metaRes.status);
-    const meta = await metaRes.json();
+    const meta = await fetch(`https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels&bbox=${bbox}`).then(r=>r.json());
     const stations = (meta?.stations||[])
       .map(s=>({ id: s.id || s.stationId || s.station_id, name: s.name, lat: +s.lat, lon: +s.lng || +s.lon }))
       .filter(s=>isFinite(s.lat)&&isFinite(s.lon));
@@ -1691,9 +1543,7 @@ async function loadTidesIfCoastal(lat, lon, tz){
     const end   = new Date(today.getTime()+3*24*3600*1000);
     const fmt = (d)=>`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
     const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&begin_date=${fmt(today)}&end_date=${fmt(end)}&datum=MLLW&station=${best.id}&time_zone=lst_ldt&units=english&interval=hilo&format=json`;
-    const predRes = await fetchWithTimeout(url, { cache:'no-store' }, null, FETCH_TIMEOUT_MS);
-    if(!predRes.ok) throw new Error('HTTP '+predRes.status);
-    const pred = await predRes.json();
+    const pred = await fetch(url).then(r=>r.json());
     const arr = pred?.predictions||[];
 
     const byDate = new Map();
@@ -1827,8 +1677,6 @@ async function prefetchPlace(place){
       hourlyAllFull: hourlyFull,
       hourlyOffset: 0,
       hourlyWindowSize: 24,
-      majorTimes: '—',
-      minorTimes: '—',
       tides: { visible:false },
       alerts: prefetchedAlerts
     });
